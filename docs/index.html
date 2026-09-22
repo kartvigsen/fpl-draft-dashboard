@@ -63,6 +63,7 @@ button.ghost:hover { background: var(--wash); }
 .tile .note { color: var(--ink-2); font-size: 12.5px; margin: 6px 0 0; overflow-wrap: anywhere; }
 .card { padding: 16px; margin-bottom: 12px; min-width: 0; }
 .grid2 { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+.grid-2col { display: grid; gap: 12px; grid-template-columns: repeat(2, 1fr); }
 .chart { position: relative; margin-top: 8px; min-height: 120px; }
 .chart svg { display: block; width: 100%; height: auto; overflow: visible; touch-action: pan-y; }
 .chart:focus-visible { outline-offset: 4px; border-radius: 8px; }
@@ -123,6 +124,11 @@ details .tbl-wrap { margin-top: 8px; }
   background: var(--surface); color: var(--ink); border: 1px solid var(--border);
   border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 13px; min-width: 0;
 }
+textarea {
+  display: block; width: 100%; background: var(--surface); color: var(--ink);
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+  font: inherit; font-size: 13.5px; resize: vertical;
+}
 .hdr-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 [hidden] { display: none !important; }
 .tabs {
@@ -142,7 +148,7 @@ details .tbl-wrap { margin-top: 8px; }
 a.tile { display: block; color: inherit; text-decoration: none; }
 a.tile:hover { background: var(--wash); }
 @media (max-width: 560px) {
-  .grid2 { grid-template-columns: 1fr; }
+  .grid2, .grid-2col { grid-template-columns: 1fr; }
   h1 { font-size: 21px; }
 }
 </style>
@@ -214,6 +220,23 @@ function placeTip(tip, host, x, y) {
 function tipRow(m, value, label) {
   return h("div", { class: "r" }, h("span", { class: "key", style: `background:${col(m)}` }),
            h("b", {}, value), h("span", { class: "nm" }, label || nameOf(m)));
+}
+
+/* ---------- red-orange-yellow-green score gradient ---------- */
+// ColorBrewer RdYlGn: darkest/most saturated at the extremes, palest at the
+// midpoint, so "tone" (light-to-dark) already tracks distance from the middle.
+const RDYLGN = ["#d73027", "#fc8d59", "#fee08b", "#ffffbf", "#d9ef8b", "#91cf60", "#1a9850"];
+const hexToRgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+function scaleColor(t) {
+  t = Math.max(0, Math.min(1, t));
+  const n = RDYLGN.length - 1, seg = Math.min(n - 1, Math.floor(t * n)), lt = t * n - seg;
+  const c0 = hexToRgb(RDYLGN[seg]), c1 = hexToRgb(RDYLGN[seg + 1]);
+  return "#" + c0.map((v, i) => Math.round(v + (c1[i] - v) * lt).toString(16).padStart(2, "0")).join("");
+}
+function inkOn(hex) {
+  const [r, g, b] = hexToRgb(hex).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return lum > 0.5 ? "var(--h-ink-light)" : "var(--h-ink-dark)";
 }
 
 /* ---------- axis helpers ---------- */
@@ -344,11 +367,12 @@ function activeTabLabel() {
   const found = TABS.find(([k]) => tabBtns[k] && tabBtns[k].getAttribute("aria-selected") === "true");
   return found ? found[1] : "Overview";
 }
-function openFeedbackIssue() {
+function openFeedbackIssue(text) {
   const tab = activeTabLabel();
+  const typed = typeof text === "string" ? text.trim() : "";
   const title = encodeURIComponent(`Feedback: ${tab} tab`);
-  const body = encodeURIComponent(`Feedback about the "${tab}" tab:\n\n`);
-  window.open(`https://github.com/${REPO}/issues/new?title=${title}&body=${body}`, "_blank", "noopener");
+  const body = encodeURIComponent(typed ? `${typed}\n\n---\nSubmitted from the "${tab}" tab.` : `Feedback about the "${tab}" tab:\n\n`);
+  window.open(`https://github.com/${REPO}/issues/new?title=${title}&body=${body}&labels=feedback`, "_blank", "noopener");
 }
 
 /* ---------- page ---------- */
@@ -474,16 +498,23 @@ else {
   lineChart(host1, { xs: gws, series, label: "Points per round for each manager",
     labels: [{ ...hiI }, { ...loI, below: true }] });
 
-  const rows = finishedRounds.map(r => h("tr", {}, h("td", {}, `GW${r.gw}`),
-    M.map(m => {
-      const isW = r.winners.includes(m.entry_id), isL = r.lowest.includes(m.entry_id);
-      return h("td", { class: "num" + (isW ? " win" : "") },
-        isW ? h("span", { class: "mark", title: "Top score" }, "▲") : isL ? h("span", { class: "mark", title: "Lowest score" }, "▼") : null,
-        r.scores[m.entry_id]);
-    })));
+  const rows = finishedRounds.map(r => {
+    const vals = M.map(m => r.scores[m.entry_id]).filter(v => v != null);
+    const lo = Math.min(...vals), hi = Math.max(...vals);
+    return h("tr", {}, h("td", {}, `GW${r.gw}`),
+      M.map(m => {
+        const isW = r.winners.includes(m.entry_id), isL = r.lowest.includes(m.entry_id);
+        const v = r.scores[m.entry_id];
+        const bg = scaleColor(hi === lo ? 0.5 : (v - lo) / (hi - lo)), ink = inkOn(bg);
+        return h("td", { class: "num" + (isW ? " win" : ""), style: `background:${bg};color:${ink}` },
+          isW ? h("span", { class: "mark", style: `color:${ink}`, title: "Top score" }, "▲") :
+            isL ? h("span", { class: "mark", style: `color:${ink}`, title: "Lowest score" }, "▼") : null,
+          v);
+      }));
+  });
   if (D.live_round) rows.push(h("tr", { class: "live" }, h("td", {}, `GW${D.live_round.gw} live`),
     M.map(m => h("td", { class: "num" }, D.live_round.scores[m.entry_id] ?? "–"))));
-  pg.append(card("Every round", "▲ top score of the round (ties are shared), ▼ lowest score. The live round is not counted.",
+  pg.append(card("Every round", "▲ top score of the round (ties are shared), ▼ lowest score. Cells are shaded from red (lowest that round) to green (highest). The live round is not counted.",
     h("div", { class: "tbl-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Round"), M.map(m =>
       h("th", {}, h("span", { class: "who" }, dot(m), nameOf(m)))))), h("tbody", {}, rows)))));
 
@@ -507,7 +538,6 @@ else {
   recRows.push(["Highest round", `${R.highest_round.points} pts`, `${nameOf(byId[R.highest_round.entry_id])}, GW${R.highest_round.gw}`]);
   recRows.push(["Lowest round", `${R.lowest_round.points} pts`, `${nameOf(byId[R.lowest_round.entry_id])}, GW${R.lowest_round.gw}`]);
   if (R.biggest_win) recRows.push(["Biggest winning margin", `${R.biggest_win.margin} pts`, `${nm(R.biggest_win.entry_ids)}, GW${R.biggest_win.gw}`]);
-  if (R.closest_round) recRows.push(["Closest round", R.closest_round.margin === 0 ? "Tie" : `${R.closest_round.margin} pts`, `${nm(R.closest_round.entry_ids)}, GW${R.closest_round.gw}`]);
   if (R.longest_win_streak && R.longest_win_streak.length) {
     const st = R.longest_win_streak;
     recRows.push(["Longest winning streak", `${st.length} round${st.length > 1 ? "s" : ""}`, `${nameOf(byId[st.entry_id])}, GW${st.from}–${st.to}`]);
@@ -581,20 +611,19 @@ pg = panels.transactions;
         h("td", { class: "l" }, h("span", { class: "who" }, dot(byId[x.entry_id]), nameOf(byId[x.entry_id]))),
         h("td", { class: "l" }, kindName(x)), h("td", { class: "l" }, ok ? "Accepted" : "Denied"),
         h("td", { class: "l" }, x.in ? h("span", {}, x.in.name, h("span", { class: "pos" }, x.in.pos)) : "–"),
-        h("td", { class: "l" }, x.out ? h("span", {}, x.out.name, h("span", { class: "pos" }, x.out.pos)) : "–"),
-        h("td", { class: "num" }, ok && x.delta != null ? (x.delta > 0 ? "+" : "") + x.delta : "–")));
+        h("td", { class: "l" }, x.out ? h("span", {}, x.out.name, h("span", { class: "pos" }, x.out.pos)) : "–")));
     }
     more.hidden = list.length <= LIM;
     more.textContent = showAll ? "Show fewer" : `Show all ${list.length}`;
-    if (!list.length) body.append(h("tr", {}, h("td", { class: "l", colspan: 7 }, emptyMsg("No moves match these filters."))));
+    if (!list.length) body.append(h("tr", {}, h("td", { class: "l", colspan: 6 }, emptyMsg("No moves match these filters."))));
   }
   function applyFilters() { showAll = false; paint(); }
   const more = h("button", { class: "ghost", type: "button", style: "margin-top:10px",
     onclick: () => { showAll = !showAll; paint(); } }, "Show all");
   paint();
-  pg.append(card("All moves", "Newest first. Net = points scored by the player in minus the player out since the move (finished rounds only).",
+  pg.append(card("All moves", "Newest first.",
     h("div", { class: "filters" }, teamSel, typeSel, resultSel, gwSel, nameInput),
-    h("div", { class: "tbl-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["GW", "Team", "Type", "Result", "In", "Out", "Net"].map((x, i) =>
+    h("div", { class: "tbl-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["GW", "Team", "Type", "Result", "In", "Out"].map((x, i) =>
       h("th", { class: i < 6 ? "l" : "" }, x)))), body)), more));
 }
 
@@ -602,20 +631,19 @@ pg = panels.transactions;
 pg = panels.players;
 if (gws.length) {
   const P = D.players;
-  pg.append(section("Top scorers"));
-  pg.append(h("div", { class: "grid2" }, ranked.map(m => card(nameOf(m), "Top scorers while in the starting XI",
-    h("ul", { class: "plist" }, (P.top_by_manager[m.entry_id] || []).map(p => h("li", {},
-      h("span", {}, p.name, h("span", { class: "pos" }, p.pos), h("span", { class: "meta" }, `${p.team} · ${p.starts} starts`)),
-      h("span", { class: "win num" }, p.points))))))));
-  const minStarts = P.low_scorers_min_starts || 0;
-  pg.append(section("Lowest scorers"));
-  pg.append(h("div", { class: "grid2" }, ranked.map(m => card(nameOf(m),
-    `Fewest points, players with at least ${minStarts} start${minStarts === 1 ? "" : "s"}`,
-    (P.low_by_manager[m.entry_id] || []).length
-      ? h("ul", { class: "plist" }, (P.low_by_manager[m.entry_id] || []).map(p => h("li", {},
-          h("span", {}, p.name, h("span", { class: "pos" }, p.pos), h("span", { class: "meta" }, `${p.team} · ${p.starts} starts`)),
-          h("span", { class: "win num" }, p.points))))
-      : emptyMsg("No player meets the starts threshold yet.")))));
+  const scorerLine = p => h("li", {},
+    h("span", {}, p.name, h("span", { class: "pos" }, p.pos), h("span", { class: "meta" }, `${p.team} · ${p.starts} starts`)),
+    h("span", { class: "win num" }, p.points));
+  pg.append(section("Scorers by team"));
+  pg.append(h("div", { class: "grid-2col" }, ranked.map(m => {
+    const all = P.scorers_by_manager[m.entry_id] || [];
+    if (!all.length) return card(nameOf(m), "All players who scored while in the starting XI.", emptyMsg("No players have scored yet."));
+    const head = all.slice(0, 5), rest = all.slice(5);
+    return card(nameOf(m), "All players who scored while in the starting XI, most to fewest points.",
+      h("ul", { class: "plist" }, head.map(scorerLine)),
+      rest.length ? h("details", {}, h("summary", {}, `Show ${rest.length} more player${rest.length === 1 ? "" : "s"}`),
+        h("ul", { class: "plist" }, rest.map(scorerLine))) : null);
+  })));
   const benchRows = ranked.map(m => ({ m, value: P.bench[m.entry_id].total,
     note: P.bench[m.entry_id].worst_gw ? `Worst round: ${P.bench[m.entry_id].worst_gw.points} bench pts (GW${P.bench[m.entry_id].worst_gw.gw})` : "" }));
   const missedList = P.missed && P.missed.length
@@ -636,14 +664,22 @@ if (gws.length) {
 /* feedback */
 pg = panels.feedback;
 pg.append(section("Feedback"));
-pg.append(h("p", { class: "sub" }, "Use the ", h("strong", {}, "Feedback"), " button above to report a bug or suggest an idea. Issues already reported on this project:"));
+{
+  const text = h("textarea", { rows: "4", placeholder: "What would you like to see changed or added?" });
+  const submit = h("button", { class: "ghost", type: "button", style: "margin-top:8px",
+    onclick: () => { if (!text.value.trim()) { text.focus(); return; } openFeedbackIssue(text.value); text.value = ""; } },
+    "Submit feedback");
+  pg.append(card("Add feedback", "Opens a pre-filled GitHub issue with your text — the Feedback button above does the same for a quick note. You'll need a GitHub account to post it.",
+    text, submit));
+}
+pg.append(h("p", { class: "sub" }, "Feedback already filed on this project, newest first:"));
 {
   const box = h("div", {});
   pg.append(box);
   function loadIssues() {
     box.textContent = "";
     box.append(emptyMsg("Loading issues…"));
-    fetch(`https://api.github.com/repos/${REPO}/issues?state=all&per_page=30&sort=created&direction=desc`,
+    fetch(`https://api.github.com/repos/${REPO}/issues?state=all&per_page=30&labels=feedback&sort=created&direction=desc`,
       { headers: { "Accept": "application/vnd.github+json" } })
       .then(res => {
         if (res.status === 403 || res.status === 429) throw new Error("rate-limited");
@@ -653,18 +689,21 @@ pg.append(h("p", { class: "sub" }, "Use the ", h("strong", {}, "Feedback"), " bu
       .then(items => {
         const issues = (Array.isArray(items) ? items : []).filter(it => !it.pull_request);
         box.textContent = "";
-        if (!issues.length) { box.append(emptyMsg("No issues reported yet.")); return; }
+        if (!issues.length) { box.append(emptyMsg("No feedback filed yet.")); return; }
         box.append(h("ul", { class: "plist" }, issues.map(it => {
           const link = typeof it.html_url === "string" && it.html_url.startsWith("https://github.com/") ? it.html_url : null;
           const when = new Date(it.created_at);
           const whenText = isNaN(when) ? "" : when.toLocaleDateString("en-GB", { dateStyle: "medium" });
           const author = (it.user && it.user.login) || "unknown";
           const replies = it.comments === 1 ? "1 reply" : `${fmt(it.comments)} replies`;
+          const implemented = it.state !== "open";
           return h("li", {},
             h("span", {},
               link ? h("a", { href: link, target: "_blank", rel: "noopener noreferrer" }, it.title) : h("span", {}, it.title),
-              h("span", { class: "meta" }, ` #${it.number} · ${it.state === "open" ? "Open" : "Closed"} · ${author} · ${whenText}`)),
-            h("span", { class: "win num" }, replies));
+              h("span", { class: "meta" }, ` #${it.number} · ${author} · ${whenText}`)),
+            h("span", { style: "display:flex;flex-direction:column;align-items:flex-end;gap:2px" },
+              h("span", { class: implemented ? "up" : "down" }, implemented ? "Implemented" : "Open"),
+              h("span", { class: "meta" }, replies)));
         })));
       })
       .catch(err => {
@@ -672,7 +711,7 @@ pg.append(h("p", { class: "sub" }, "Use the ", h("strong", {}, "Feedback"), " bu
         const rateLimited = err.message === "rate-limited";
         box.append(emptyMsg(rateLimited
           ? "GitHub's API rate limit was hit. Wait a moment and try again."
-          : "Could not load issues right now."));
+          : "Could not load feedback right now."));
         box.append(h("button", { class: "ghost", type: "button", style: "margin-top:8px", onclick: loadIssues }, "Retry"));
       });
   }

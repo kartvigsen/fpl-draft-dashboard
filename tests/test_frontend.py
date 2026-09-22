@@ -20,9 +20,9 @@ class FrontendMarkupTest(unittest.TestCase):
     def test_best_and_worst_moves_section_is_gone(self):
         self.assertNotIn("Best and worst moves", HTML)
 
-    def test_net_column_is_kept_in_all_moves_table(self):
+    def test_net_column_is_removed_from_all_moves_table(self):
         self.assertIn('"All moves"', HTML)
-        self.assertIn('"Net"', HTML)
+        self.assertNotIn('"Net"', HTML)
 
     def test_all_moves_has_filters_for_team_type_result_gw_and_name(self):
         self.assertIn('"Filter by team"', HTML)
@@ -40,11 +40,23 @@ class FrontendMarkupTest(unittest.TestCase):
     def test_heat_map_rows_are_sorted_by_standing_not_signup_order(self):
         self.assertIn("const heatRows = ranked.map(m =>", HTML)
 
-    def test_lowest_scorers_present_alongside_top_scorers(self):
-        self.assertIn("Top scorers", HTML)
-        self.assertIn("Lowest scorers", HTML)
-        self.assertIn("low_by_manager", HTML)
-        self.assertIn("low_scorers_min_starts", HTML)
+    def test_scorers_merged_into_one_foldable_list_per_team(self):
+        self.assertIn("scorers_by_manager", HTML)
+        self.assertNotIn("low_by_manager", HTML)
+        self.assertNotIn("low_scorers_min_starts", HTML)
+        self.assertNotIn("top_by_manager", HTML)
+        self.assertIn('h("details"', HTML)
+        self.assertIn("more player", HTML)
+
+    def test_players_tab_uses_a_2column_grid(self):
+        self.assertIn("grid-2col", HTML)
+
+    def test_closest_round_removed_from_records(self):
+        self.assertNotIn("Closest round", HTML)
+
+    def test_every_round_table_uses_red_to_green_gradient(self):
+        self.assertIn("RDYLGN", HTML)
+        self.assertIn("function scaleColor", HTML)
 
     def test_feedback_button_and_tab_exist(self):
         self.assertIn('"feedback", "Feedback"', HTML)
@@ -63,6 +75,18 @@ class FrontendMarkupTest(unittest.TestCase):
     def test_feedback_tab_fetches_issues_client_side_and_filters_prs(self):
         self.assertIn("api.github.com/repos/${REPO}/issues", HTML)
         self.assertIn("!it.pull_request", HTML)
+
+    def test_feedback_box_files_a_labeled_issue(self):
+        self.assertIn('h("textarea"', HTML)
+        self.assertIn("Submit feedback", HTML)
+        self.assertIn("labels=feedback", HTML)
+
+    def test_feedback_list_only_shows_feedback_labeled_issues(self):
+        self.assertIn("labels=feedback", HTML)
+
+    def test_feedback_status_shown_as_green_or_red(self):
+        self.assertIn('"Implemented"', HTML)
+        self.assertIn('class: implemented ? "up" : "down"', HTML)
 
     def test_feedback_tab_only_follows_github_links(self):
         self.assertIn('it.html_url.startsWith("https://github.com/")', HTML)
