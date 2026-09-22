@@ -51,12 +51,27 @@ class FrontendMarkupTest(unittest.TestCase):
     def test_players_tab_uses_a_2column_grid(self):
         self.assertIn("grid-2col", HTML)
 
+    def test_scorer_table_is_sortable_by_name_starts_points_and_avg(self):
+        self.assertIn('key: "name"', HTML)
+        self.assertIn('key: "starts"', HTML)
+        self.assertIn('key: "points"', HTML)
+        self.assertIn('key: "avg"', HTML)
+        self.assertIn("Avg/start", HTML)
+        self.assertIn("p.points / p.starts", HTML)
+        self.assertIn('role: "button"', HTML)
+
     def test_closest_round_removed_from_records(self):
         self.assertNotIn("Closest round", HTML)
 
     def test_every_round_table_uses_red_to_green_gradient(self):
         self.assertIn("RDYLGN", HTML)
         self.assertIn("function scaleColor", HTML)
+
+    def test_every_round_gradient_is_scaled_across_all_rounds(self):
+        # The color scale must be computed once from every finished round's
+        # scores, not reset per row, so shades are comparable table-wide.
+        self.assertIn("allRoundVals", HTML)
+        self.assertIn("const allLo = Math.min(...allRoundVals), allHi = Math.max(...allRoundVals);", HTML)
 
     def test_feedback_button_and_tab_exist(self):
         self.assertIn('"feedback", "Feedback"', HTML)

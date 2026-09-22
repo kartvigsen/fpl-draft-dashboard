@@ -84,6 +84,8 @@ button.ghost:hover { background: var(--wash); }
 table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
 th, td { padding: 8px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--grid); }
 th { color: var(--ink-2); font-weight: 600; font-size: 12.5px; }
+th[role="button"] { cursor: pointer; user-select: none; }
+th[role="button"]:hover { color: var(--ink); }
 th:first-child, td:first-child { text-align: left; }
 td.l, th.l { text-align: left; }
 tr:last-child td { border-bottom: 0; }
@@ -498,14 +500,14 @@ else {
   lineChart(host1, { xs: gws, series, label: "Points per round for each manager",
     labels: [{ ...hiI }, { ...loI, below: true }] });
 
+  const allRoundVals = finishedRounds.flatMap(r => M.map(m => r.scores[m.entry_id]).filter(v => v != null));
+  const allLo = Math.min(...allRoundVals), allHi = Math.max(...allRoundVals);
   const rows = finishedRounds.map(r => {
-    const vals = M.map(m => r.scores[m.entry_id]).filter(v => v != null);
-    const lo = Math.min(...vals), hi = Math.max(...vals);
     return h("tr", {}, h("td", {}, `GW${r.gw}`),
       M.map(m => {
         const isW = r.winners.includes(m.entry_id), isL = r.lowest.includes(m.entry_id);
         const v = r.scores[m.entry_id];
-        const bg = scaleColor(hi === lo ? 0.5 : (v - lo) / (hi - lo)), ink = inkOn(bg);
+        const bg = scaleColor(allHi === allLo ? 0.5 : (v - allLo) / (allHi - allLo)), ink = inkOn(bg);
         return h("td", { class: "num" + (isW ? " win" : ""), style: `background:${bg};color:${ink}` },
           isW ? h("span", { class: "mark", style: `color:${ink}`, title: "Top score" }, "▲") :
             isL ? h("span", { class: "mark", style: `color:${ink}`, title: "Lowest score" }, "▼") : null,
@@ -514,7 +516,7 @@ else {
   });
   if (D.live_round) rows.push(h("tr", { class: "live" }, h("td", {}, `GW${D.live_round.gw} live`),
     M.map(m => h("td", { class: "num" }, D.live_round.scores[m.entry_id] ?? "–"))));
-  pg.append(card("Every round", "▲ top score of the round (ties are shared), ▼ lowest score. Cells are shaded from red (lowest that round) to green (highest). The live round is not counted.",
+  pg.append(card("Every round", "▲ top score of the round (ties are shared), ▼ lowest score. Cells are shaded from red to green on the same scale across every round and manager, so colours are comparable table-wide, not just within a row. The live round is not counted.",
     h("div", { class: "tbl-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Round"), M.map(m =>
       h("th", {}, h("span", { class: "who" }, dot(m), nameOf(m)))))), h("tbody", {}, rows)))));
 
@@ -631,18 +633,56 @@ pg = panels.transactions;
 pg = panels.players;
 if (gws.length) {
   const P = D.players;
-  const scorerLine = p => h("li", {},
-    h("span", {}, p.name, h("span", { class: "pos" }, p.pos), h("span", { class: "meta" }, `${p.team} · ${p.starts} starts`)),
-    h("span", { class: "win num" }, p.points));
+  const SCORER_COLS = [
+    { key: "name", label: "Player", num: false, get: p => p.name },
+    { key: "starts", label: "Starts", num: true, get: p => p.starts },
+    { key: "points", label: "Points", num: true, get: p => p.points },
+    { key: "avg", label: "Avg/start", num: true, get: p => p.points / p.starts },
+  ];
+  function scorerTable(all) {
+    let sortKey = "points", sortDir = -1;
+    const theadRow = h("tr", {});
+    const headBody = h("tbody", {}), restBody = h("tbody", {});
+    const summary = h("summary", {});
+    const details = h("details", {}, summary, h("div", { class: "tbl-wrap" }, h("table", {}, restBody)));
+    const row = p => h("tr", {},
+      h("td", { class: "l" }, p.name, h("span", { class: "pos" }, p.pos), h("span", { class: "meta" }, ` ${p.team}`)),
+      h("td", { class: "num" }, p.starts), h("td", { class: "num" }, p.points),
+      h("td", { class: "num" }, (p.points / p.starts).toFixed(1)));
+    function sortBy(key) {
+      const col = SCORER_COLS.find(c => c.key === key);
+      if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = col.num ? -1 : 1; }
+      render();
+    }
+    function render() {
+      const col = SCORER_COLS.find(c => c.key === sortKey);
+      const sorted = [...all].sort((a, b) => {
+        const av = col.get(a), bv = col.get(b);
+        return (col.num ? av - bv : String(av).localeCompare(String(bv))) * sortDir;
+      });
+      const head = sorted.slice(0, 5), rest = sorted.slice(5);
+      headBody.textContent = ""; headBody.append(...head.map(row));
+      restBody.textContent = ""; restBody.append(...rest.map(row));
+      details.hidden = rest.length === 0;
+      summary.textContent = `Show ${rest.length} more player${rest.length === 1 ? "" : "s"}`;
+      theadRow.textContent = "";
+      for (const c of SCORER_COLS) {
+        const active = c.key === sortKey;
+        theadRow.append(h("th", { class: c.num ? "" : "l", role: "button", tabindex: "0",
+          "aria-sort": active ? (sortDir === 1 ? "ascending" : "descending") : "none",
+          onclick: () => sortBy(c.key),
+          onkeydown: ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); sortBy(c.key); } } },
+          c.label + (active ? (sortDir === 1 ? " ▲" : " ▼") : "")));
+      }
+    }
+    render();
+    return h("div", {}, h("div", { class: "tbl-wrap" }, h("table", {}, h("thead", {}, theadRow), headBody)), details);
+  }
   pg.append(section("Scorers by team"));
   pg.append(h("div", { class: "grid-2col" }, ranked.map(m => {
     const all = P.scorers_by_manager[m.entry_id] || [];
-    if (!all.length) return card(nameOf(m), "All players who scored while in the starting XI.", emptyMsg("No players have scored yet."));
-    const head = all.slice(0, 5), rest = all.slice(5);
-    return card(nameOf(m), "All players who scored while in the starting XI, most to fewest points.",
-      h("ul", { class: "plist" }, head.map(scorerLine)),
-      rest.length ? h("details", {}, h("summary", {}, `Show ${rest.length} more player${rest.length === 1 ? "" : "s"}`),
-        h("ul", { class: "plist" }, rest.map(scorerLine))) : null);
+    return card(nameOf(m), "All players who scored while in the starting XI. Click a column to sort.",
+      all.length ? scorerTable(all) : emptyMsg("No players have scored yet."));
   })));
   const benchRows = ranked.map(m => ({ m, value: P.bench[m.entry_id].total,
     note: P.bench[m.entry_id].worst_gw ? `Worst round: ${P.bench[m.entry_id].worst_gw.points} bench pts (GW${P.bench[m.entry_id].worst_gw.gw})` : "" }));

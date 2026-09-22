@@ -50,7 +50,7 @@ If you use the included `.github/workflows/update.yml`, the dashboard rebuilds i
 
 ## Rounds tab
 
-- **Every round** shades each score from red (lowest that round) through orange and yellow to green (highest), on top of the existing ▲/▼ markers for the top and lowest score.
+- **Every round** shades each score from red through orange and yellow to green, on the same scale across every round and manager (not reset per row), so a shade means the same thing anywhere in the table — on top of the existing ▲/▼ markers for the top and lowest score of each round.
 - The **Records** table no longer shows "Closest round" (everything else — highest/lowest round, biggest winning margin, longest winning streak — is unchanged).
 
 ## Transactions tab
@@ -60,7 +60,7 @@ If you use the included `.github/workflows/update.yml`, the dashboard rebuilds i
 
 ## Players tab
 
-One list per team of every player who scored a positive total while in that manager's starting XI, most points first. The top 5 show directly; the rest fold out under "Show N more players". A player who was traded mid-season appears under both teams, with the points they scored for each. Teams are laid out two per row.
+One table per team of every player who scored a positive total while in that manager's starting XI, with columns for starts, points and average points per start — click a column header to sort by it (click again to reverse). Sorted by points by default; the top 5 show directly and the rest fold out under "Show N more players". A player who was traded mid-season appears under both teams, with the points they scored for each. Teams are laid out two per row.
 
 ## Feedback
 
