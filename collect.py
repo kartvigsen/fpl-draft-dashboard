@@ -57,13 +57,14 @@ def save(rel_path, obj):
 
 
 def load_state():
+    """Return the saved cache state, or None if there isn't one yet."""
     p = RAW / "_state.json"
-    if p.exists():
-        try:
-            return json.loads(p.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            pass
-    return {"final_gws": []}
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
 
 
 def collect(force=False, log=print):
@@ -90,7 +91,15 @@ def collect(force=False, log=print):
     log(f"League '{details.get('league', {}).get('name')}' with {len(entry_ids)} managers")
 
     # 3. Per-gameweek files: live player points + each manager's lineup.
-    state = {"final_gws": []} if force else load_state()
+    # A new season gets a new league_id (see README); an old cache saved
+    # before this check existed has no "league_id" at all. Either way the
+    # cached "final" gameweeks belong to a different league and must not be
+    # trusted, or last season's numbers would leak into the new one.
+    prev_state = load_state()
+    if not force and prev_state is not None and prev_state.get("league_id") != league_id:
+        force = True
+        log(f"League changed (was {prev_state.get('league_id')!r}, now {league_id}); re-downloading everything.")
+    state = {"final_gws": []} if force or prev_state is None else prev_state
     final = set(state.get("final_gws", []))
     fetched = []
     for gw in range(1, current + 1):

@@ -2,7 +2,19 @@ name: Update dashboard
 
 on:
   schedule:
-    - cron: "0 5 * * *"   # every day at 05:00 UTC (07:00 in Denmark in summer)
+    # Denmark is UTC+1 (CET, winter) or UTC+2 (CEST, summer), and GitHub
+    # Actions schedules are always UTC, so we list all four UTC times that
+    # could be 14:00 or 18:00 in Denmark. The "Check Danish local time" step
+    # below works out which two of these four runs actually matter and lets
+    # the other two exit immediately.
+    - cron: "0 12,13,16,17 * * *"
+  push:
+    branches: [main]
+    paths:
+      - "docs/index.html"
+      - "*.py"
+      - "config.json"
+      - ".github/workflows/update.yml"
   workflow_dispatch:      # adds the manual "Run workflow" button
 
 permissions:
@@ -22,16 +34,31 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Check Danish local time
+        id: gate
+        run: |
+          hour=$(TZ=Europe/Copenhagen date +%H)
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$hour" != "14" ] && [ "$hour" != "18" ]; then
+            echo "It's $hour:00 in Denmark, not 14:00 or 18:00 - skipping this scheduled run."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == 'true'
 
       - uses: actions/setup-python@v5
+        if: steps.gate.outputs.run == 'true'
         with:
           python-version: "3.12"
 
       - name: Download data and rebuild the dashboard
+        if: steps.gate.outputs.run == 'true'
         run: python3 update.py
 
       - name: Save new data to the repository
+        if: steps.gate.outputs.run == 'true'
         run: |
           git config user.name "fpl-dashboard-bot"
           git config user.email "actions@users.noreply.github.com"
@@ -44,10 +71,13 @@ jobs:
           fi
 
       - uses: actions/configure-pages@v5
+        if: steps.gate.outputs.run == 'true'
 
       - uses: actions/upload-pages-artifact@v3
+        if: steps.gate.outputs.run == 'true'
         with:
           path: docs
 
       - id: deployment
+        if: steps.gate.outputs.run == 'true'
         uses: actions/deploy-pages@v4
