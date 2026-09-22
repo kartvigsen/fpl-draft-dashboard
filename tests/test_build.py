@@ -16,6 +16,61 @@ sys.path.insert(0, str(ROOT / "tests"))
 import build_stats  # noqa: E402
 import mock  # noqa: E402
 
+
+def _dump(root, rel, obj):
+    p = Path(root) / rel
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(obj), encoding="utf-8")
+
+
+def write_low_scorers_fixture(root):
+    """One manager, 5 finished gameweeks, four hand-picked players so the
+    "at least 60% of finished rounds" threshold (ceil(0.6*5) = 3 starts) and
+    the points/starts tie-break can be checked exactly.
+
+    Ann:  5,5,5,0,0 = 15 pts, 5 starts   (qualifies)
+    Ben:  1,1,1,1,1 =  5 pts, 5 starts   (qualifies, fewest points)
+    Cid: 20,20        = 40 pts, 2 starts (does NOT qualify: below 3 starts)
+    Eve:  2,2,1        =  5 pts, 3 starts (qualifies, ties Ben on points)
+    """
+    _dump(root, "game.json", {"current_event": 5, "current_event_finished": True})
+    _dump(root, "bootstrap.json", {
+        "elements": [
+            {"id": 1001, "web_name": "Ann", "element_type": 1, "team": 1},
+            {"id": 1002, "web_name": "Ben", "element_type": 1, "team": 1},
+            {"id": 1003, "web_name": "Cid", "element_type": 1, "team": 1},
+            {"id": 1005, "web_name": "Eve", "element_type": 1, "team": 1},
+        ],
+        "teams": [{"id": 1, "short_name": "ARS"}],
+    })
+    _dump(root, "transactions.json", [])
+    _dump(root, "league_details.json", {
+        "league": {"id": 1, "name": "Solo League"},
+        "league_entries": [{"entry_id": 201, "id": 9001, "entry_name": "Solo Team",
+                            "player_first_name": "Sam", "player_last_name": "Solo",
+                            "short_name": "SOL"}],
+        "standings": [{"league_entry": 9001, "event_total": 0, "total": 0}],
+    })
+    live_by_gw = {
+        1: {1001: 5, 1002: 1, 1003: 20, 1005: 2},
+        2: {1001: 5, 1002: 1, 1003: 20, 1005: 2},
+        3: {1001: 5, 1002: 1, 1005: 1},
+        4: {1001: 0, 1002: 1},
+        5: {1001: 0, 1002: 1},
+    }
+    picks_by_gw = {
+        1: [(1001, 1), (1002, 2), (1003, 3), (1005, 5)],
+        2: [(1001, 1), (1002, 2), (1003, 3), (1005, 5)],
+        3: [(1001, 1), (1002, 2), (1005, 5)],
+        4: [(1001, 1), (1002, 2)],
+        5: [(1001, 1), (1002, 2)],
+    }
+    for gw in range(1, 6):
+        _dump(root, f"live/gw{gw}.json",
+              {"elements": {str(e): {"stats": {"total_points": v}} for e, v in live_by_gw[gw].items()}})
+        picks = [{"element": el, "position": pos} for el, pos in picks_by_gw[gw]]
+        _dump(root, f"entries/201/gw{gw}.json", {"picks": picks, "subs": [], "entry_history": {}})
+
 # Four managers, gameweeks 1-4 finished, gameweek 5 in progress.
 SCORES = [
     [50, 60, 40, 55],   # GW1: manager B wins by 5, C last
@@ -151,6 +206,37 @@ class BuildTest(unittest.TestCase):
             self.assertIsNone(out["live_round"])
         finally:
             shutil.rmtree(d2, ignore_errors=True)
+
+
+class LowScorersTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        write_low_scorers_fixture(self.tmp)
+        self.d = build_stats.build(self.tmp)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_threshold_is_60pct_of_finished_rounds_rounded_up(self):
+        self.assertEqual(self.d["players"]["low_scorers_min_starts"], 3)
+
+    def test_players_below_the_threshold_are_excluded(self):
+        low = self.d["players"]["low_by_manager"]["201"]
+        names = [p["name"] for p in low]
+        self.assertNotIn("Cid", names)  # only 2 starts, despite scoring 40
+
+    def test_lowest_scorers_ordered_by_points_then_starts(self):
+        low = self.d["players"]["low_by_manager"]["201"]
+        # Ben and Eve tie on 5 points; Ben started more rounds (5 vs 3) so
+        # comes first. Ann (15 points) comes last.
+        self.assertEqual([(p["name"], p["points"], p["starts"]) for p in low],
+                         [("Ben", 5, 5), ("Eve", 5, 3), ("Ann", 15, 5)])
+
+    def test_top_scorers_unaffected_by_the_threshold(self):
+        top = self.d["players"]["top_by_manager"]["201"]
+        # Cid tops the list despite starting only 2 of 5 rounds.
+        self.assertEqual(top[0]["name"], "Cid")
+        self.assertEqual(top[0]["points"], 40)
 
 
 if __name__ == "__main__":

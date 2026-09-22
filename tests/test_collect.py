@@ -21,16 +21,23 @@ class CollectTest(unittest.TestCase):
     def setUp(self):
         self.api = Path(tempfile.mkdtemp())
         self.out = Path(tempfile.mkdtemp())
+        self.project = Path(tempfile.mkdtemp())  # holds a throwaway config.json
+        (self.project / "config.json").write_text(json.dumps({"league_id": 7281}))
         mock.write_raw(self.api, SCORES)
         self.calls = []
-        self._orig = (collect.get_json, collect.RAW)
+        self._orig = (collect.get_json, collect.RAW, collect.ROOT)
         collect.get_json = self.fake_get
         collect.RAW = self.out
+        collect.ROOT = self.project
 
     def tearDown(self):
-        collect.get_json, collect.RAW = self._orig
+        collect.get_json, collect.RAW, collect.ROOT = self._orig
         shutil.rmtree(self.api, ignore_errors=True)
         shutil.rmtree(self.out, ignore_errors=True)
+        shutil.rmtree(self.project, ignore_errors=True)
+
+    def set_league_id(self, league_id):
+        (self.project / "config.json").write_text(json.dumps({"league_id": league_id}))
 
     def fake_get(self, path):
         self.calls.append(path)
@@ -66,6 +73,31 @@ class CollectTest(unittest.TestCase):
         collect.collect(log=lambda *_: None)
         self.calls.clear()
         collect.collect(force=True, log=lambda *_: None)
+        self.assertEqual(sum(1 for c in self.calls if c.startswith("event/")), 5)
+
+    def test_new_league_id_forces_full_redownload(self):
+        collect.collect(log=lambda *_: None)
+        state = json.loads((self.out / "_state.json").read_text())
+        self.assertEqual(state["league_id"], 7281)
+
+        # Simulate a new season: config.json now points at a different league,
+        # but the raw cache on disk still belongs to the old one.
+        self.set_league_id(9999)
+        self.calls.clear()
+        collect.collect(log=lambda *_: None)
+        # Every gameweek must be refetched, not skipped as "already final".
+        self.assertEqual(sum(1 for c in self.calls if c.startswith("event/")), 5)
+        state2 = json.loads((self.out / "_state.json").read_text())
+        self.assertEqual(state2["league_id"], 9999)
+        self.assertEqual(state2["final_gws"], [1, 2, 3, 4])
+
+    def test_state_without_league_id_forces_full_redownload(self):
+        collect.collect(log=lambda *_: None)
+        state = json.loads((self.out / "_state.json").read_text())
+        del state["league_id"]  # simulate a cache saved before this check existed
+        (self.out / "_state.json").write_text(json.dumps(state))
+        self.calls.clear()
+        collect.collect(log=lambda *_: None)
         self.assertEqual(sum(1 for c in self.calls if c.startswith("event/")), 5)
 
     def test_gameweek_becomes_final_once_finished(self):
