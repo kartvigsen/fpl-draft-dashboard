@@ -14,6 +14,7 @@
   --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
   --h0: #cde2fb; --h1: #9ec5f4; --h2: #6da7ec; --h3: #2a78d6; --h4: #184f95;
   --h-ink-light: #0b0b0b; --h-ink-dark: #ffffff;
+  --rs-lo: #e2a39d; --rs-hi: #9cc9a6;
 }
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme="light"])) {
@@ -23,6 +24,7 @@
     --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10);
     --good: #0ca30c; --bad: #ec6a6a;
     --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+    --rs-lo: #96524c; --rs-hi: #4f8a5c;
   }
 }
 :root[data-theme="dark"] {
@@ -32,6 +34,7 @@
   --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10);
   --good: #0ca30c; --bad: #ec6a6a;
   --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+  --rs-lo: #96524c; --rs-hi: #4f8a5c;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -224,21 +227,18 @@ function tipRow(m, value, label) {
            h("b", {}, value), h("span", { class: "nm" }, label || nameOf(m)));
 }
 
-/* ---------- red-orange-yellow-green score gradient ---------- */
-// ColorBrewer RdYlGn: darkest/most saturated at the extremes, palest at the
-// midpoint, so "tone" (light-to-dark) already tracks distance from the middle.
-const RDYLGN = ["#d73027", "#fc8d59", "#fee08b", "#ffffbf", "#d9ef8b", "#91cf60", "#1a9850"];
-const hexToRgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
-function scaleColor(t) {
+/* ---------- muted red-to-green score scale ---------- */
+// A diverging scale (bad hue <-> neutral wash <-> good hue) rather than a
+// four-hue traffic-light ramp: calmer, and it uses the app's own tones so it
+// adapts with the theme instead of a fixed set of hex stops.
+function roundColor(t) {
   t = Math.max(0, Math.min(1, t));
-  const n = RDYLGN.length - 1, seg = Math.min(n - 1, Math.floor(t * n)), lt = t * n - seg;
-  const c0 = hexToRgb(RDYLGN[seg]), c1 = hexToRgb(RDYLGN[seg + 1]);
-  return "#" + c0.map((v, i) => Math.round(v + (c1[i] - v) * lt).toString(16).padStart(2, "0")).join("");
-}
-function inkOn(hex) {
-  const [r, g, b] = hexToRgb(hex).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
-  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return lum > 0.5 ? "var(--h-ink-light)" : "var(--h-ink-dark)";
+  if (t < 0.5) {
+    const local = (t / 0.5) * 100;
+    return `color-mix(in oklab, var(--wash) ${local.toFixed(1)}%, var(--rs-lo) ${(100 - local).toFixed(1)}%)`;
+  }
+  const local = ((t - 0.5) / 0.5) * 100;
+  return `color-mix(in oklab, var(--rs-hi) ${local.toFixed(1)}%, var(--wash) ${(100 - local).toFixed(1)}%)`;
 }
 
 /* ---------- axis helpers ---------- */
@@ -507,10 +507,10 @@ else {
       M.map(m => {
         const isW = r.winners.includes(m.entry_id), isL = r.lowest.includes(m.entry_id);
         const v = r.scores[m.entry_id];
-        const bg = scaleColor(allHi === allLo ? 0.5 : (v - allLo) / (allHi - allLo)), ink = inkOn(bg);
-        return h("td", { class: "num" + (isW ? " win" : ""), style: `background:${bg};color:${ink}` },
-          isW ? h("span", { class: "mark", style: `color:${ink}`, title: "Top score" }, "▲") :
-            isL ? h("span", { class: "mark", style: `color:${ink}`, title: "Lowest score" }, "▼") : null,
+        const bg = roundColor(allHi === allLo ? 0.5 : (v - allLo) / (allHi - allLo));
+        return h("td", { class: "num" + (isW ? " win" : ""), style: `background:${bg}` },
+          isW ? h("span", { class: "mark", title: "Top score" }, "▲") :
+            isL ? h("span", { class: "mark", title: "Lowest score" }, "▼") : null,
           v);
       }));
   });

@@ -63,9 +63,11 @@ class FrontendMarkupTest(unittest.TestCase):
     def test_closest_round_removed_from_records(self):
         self.assertNotIn("Closest round", HTML)
 
-    def test_every_round_table_uses_red_to_green_gradient(self):
-        self.assertIn("RDYLGN", HTML)
-        self.assertIn("function scaleColor", HTML)
+    def test_every_round_table_uses_a_muted_red_to_green_scale(self):
+        self.assertIn("function roundColor", HTML)
+        self.assertIn("--rs-lo", HTML)
+        self.assertIn("--rs-hi", HTML)
+        self.assertIn("color-mix(in oklab,", HTML)
 
     def test_every_round_gradient_is_scaled_across_all_rounds(self):
         # The color scale must be computed once from every finished round's
