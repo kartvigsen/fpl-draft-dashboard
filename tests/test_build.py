@@ -23,15 +23,18 @@ def _dump(root, rel, obj):
     p.write_text(json.dumps(obj), encoding="utf-8")
 
 
-def write_low_scorers_fixture(root):
-    """One manager, 5 finished gameweeks, four hand-picked players so the
-    "at least 60% of finished rounds" threshold (ceil(0.6*5) = 3 starts) and
-    the points/starts tie-break can be checked exactly.
+def write_scorers_fixture(root):
+    """Two managers, 5 finished gameweeks, hand-picked players so the merged
+    "scorers by team" list can be checked exactly, including a player (Ann)
+    who moves from team 201 to team 202 partway through the season.
 
-    Ann:  5,5,5,0,0 = 15 pts, 5 starts   (qualifies)
-    Ben:  1,1,1,1,1 =  5 pts, 5 starts   (qualifies, fewest points)
-    Cid: 20,20        = 40 pts, 2 starts (does NOT qualify: below 3 starts)
-    Eve:  2,2,1        =  5 pts, 3 starts (qualifies, ties Ben on points)
+    Team 201: Cid 20+20=40 pts (2 starts), Ann 5+5=10 pts (2 starts, then
+    transferred away), Ben 1x5=5 pts (5 starts), F 1x5=5 pts, G 1x5=5 pts,
+    H 1 pt (1 start) -- six scorers, proving the list isn't capped at 5.
+    Dan starts every round but always scores 0, so he must NOT appear.
+
+    Team 202: Eve 2x5=10 pts (5 starts), Ann (after the move) 3x3=9 pts
+    (3 starts) -- Ann appearing here too is the multi-team case.
     """
     _dump(root, "game.json", {"current_event": 5, "current_event_finished": True})
     _dump(root, "bootstrap.json", {
@@ -40,36 +43,51 @@ def write_low_scorers_fixture(root):
             {"id": 1002, "web_name": "Ben", "element_type": 1, "team": 1},
             {"id": 1003, "web_name": "Cid", "element_type": 1, "team": 1},
             {"id": 1005, "web_name": "Eve", "element_type": 1, "team": 1},
+            {"id": 1006, "web_name": "Dan", "element_type": 1, "team": 1},
+            {"id": 1007, "web_name": "Fay", "element_type": 1, "team": 1},
+            {"id": 1008, "web_name": "Gus", "element_type": 1, "team": 1},
+            {"id": 1009, "web_name": "Hal", "element_type": 1, "team": 1},
         ],
         "teams": [{"id": 1, "short_name": "ARS"}],
     })
     _dump(root, "transactions.json", [])
     _dump(root, "league_details.json", {
-        "league": {"id": 1, "name": "Solo League"},
-        "league_entries": [{"entry_id": 201, "id": 9001, "entry_name": "Solo Team",
-                            "player_first_name": "Sam", "player_last_name": "Solo",
-                            "short_name": "SOL"}],
-        "standings": [{"league_entry": 9001, "event_total": 0, "total": 0}],
+        "league": {"id": 1, "name": "Two-team League"},
+        "league_entries": [
+            {"entry_id": 201, "id": 9001, "entry_name": "Solo Team",
+             "player_first_name": "Sam", "player_last_name": "Solo", "short_name": "SOL"},
+            {"entry_id": 202, "id": 9002, "entry_name": "Second Team",
+             "player_first_name": "Robin", "player_last_name": "Second", "short_name": "SEC"},
+        ],
+        "standings": [{"league_entry": 9001, "total": 0}, {"league_entry": 9002, "total": 0}],
     })
     live_by_gw = {
-        1: {1001: 5, 1002: 1, 1003: 20, 1005: 2},
-        2: {1001: 5, 1002: 1, 1003: 20, 1005: 2},
-        3: {1001: 5, 1002: 1, 1005: 1},
-        4: {1001: 0, 1002: 1},
-        5: {1001: 0, 1002: 1},
+        1: {1001: 5, 1002: 1, 1003: 20, 1005: 2, 1006: 0, 1007: 1, 1008: 1, 1009: 1},
+        2: {1001: 5, 1002: 1, 1003: 20, 1005: 2, 1006: 0, 1007: 1, 1008: 1},
+        3: {1001: 3, 1002: 1, 1005: 2, 1006: 0, 1007: 1, 1008: 1},
+        4: {1001: 3, 1002: 1, 1005: 2, 1006: 0, 1007: 1, 1008: 1},
+        5: {1001: 3, 1002: 1, 1005: 2, 1006: 0, 1007: 1, 1008: 1},
     }
-    picks_by_gw = {
-        1: [(1001, 1), (1002, 2), (1003, 3), (1005, 5)],
-        2: [(1001, 1), (1002, 2), (1003, 3), (1005, 5)],
-        3: [(1001, 1), (1002, 2), (1005, 5)],
-        4: [(1001, 1), (1002, 2)],
-        5: [(1001, 1), (1002, 2)],
+    picks_201_by_gw = {
+        1: [(1001, 1), (1002, 2), (1003, 3), (1006, 4), (1007, 5), (1008, 6), (1009, 7)],
+        2: [(1001, 1), (1002, 2), (1003, 3), (1006, 4), (1007, 5), (1008, 6)],
+        3: [(1002, 2), (1006, 4), (1007, 5), (1008, 6)],
+        4: [(1002, 2), (1006, 4), (1007, 5), (1008, 6)],
+        5: [(1002, 2), (1006, 4), (1007, 5), (1008, 6)],
+    }
+    picks_202_by_gw = {
+        1: [(1005, 1)],
+        2: [(1005, 1)],
+        3: [(1001, 1), (1005, 2)],
+        4: [(1001, 1), (1005, 2)],
+        5: [(1001, 1), (1005, 2)],
     }
     for gw in range(1, 6):
         _dump(root, f"live/gw{gw}.json",
               {"elements": {str(e): {"stats": {"total_points": v}} for e, v in live_by_gw[gw].items()}})
-        picks = [{"element": el, "position": pos} for el, pos in picks_by_gw[gw]]
-        _dump(root, f"entries/201/gw{gw}.json", {"picks": picks, "subs": [], "entry_history": {}})
+        for eid, picks_by_gw in ((201, picks_201_by_gw), (202, picks_202_by_gw)):
+            picks = [{"element": el, "position": pos} for el, pos in picks_by_gw[gw]]
+            _dump(root, f"entries/{eid}/gw{gw}.json", {"picks": picks, "subs": [], "entry_history": {}})
 
 # Four managers, gameweeks 1-4 finished, gameweek 5 in progress.
 SCORES = [
@@ -208,35 +226,39 @@ class BuildTest(unittest.TestCase):
             shutil.rmtree(d2, ignore_errors=True)
 
 
-class LowScorersTest(unittest.TestCase):
+class ScorersByTeamTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
-        write_low_scorers_fixture(self.tmp)
+        write_scorers_fixture(self.tmp)
         self.d = build_stats.build(self.tmp)
 
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def test_threshold_is_60pct_of_finished_rounds_rounded_up(self):
-        self.assertEqual(self.d["players"]["low_scorers_min_starts"], 3)
+    def test_all_scorers_included_not_just_top_5(self):
+        team201 = self.d["players"]["scorers_by_manager"]["201"]
+        self.assertEqual(len(team201), 6)
 
-    def test_players_below_the_threshold_are_excluded(self):
-        low = self.d["players"]["low_by_manager"]["201"]
-        names = [p["name"] for p in low]
-        self.assertNotIn("Cid", names)  # only 2 starts, despite scoring 40
+    def test_zero_point_players_are_excluded(self):
+        team201 = self.d["players"]["scorers_by_manager"]["201"]
+        self.assertNotIn("Dan", [p["name"] for p in team201])
 
-    def test_lowest_scorers_ordered_by_points_then_starts(self):
-        low = self.d["players"]["low_by_manager"]["201"]
-        # Ben and Eve tie on 5 points; Ben started more rounds (5 vs 3) so
-        # comes first. Ann (15 points) comes last.
-        self.assertEqual([(p["name"], p["points"], p["starts"]) for p in low],
-                         [("Ben", 5, 5), ("Eve", 5, 3), ("Ann", 15, 5)])
+    def test_ordered_by_points_desc_then_name(self):
+        team201 = self.d["players"]["scorers_by_manager"]["201"]
+        self.assertEqual([(p["name"], p["points"], p["starts"]) for p in team201],
+                         [("Cid", 40, 2), ("Ann", 10, 2), ("Ben", 5, 5),
+                          ("Fay", 5, 5), ("Gus", 5, 5), ("Hal", 1, 1)])
 
-    def test_top_scorers_unaffected_by_the_threshold(self):
-        top = self.d["players"]["top_by_manager"]["201"]
-        # Cid tops the list despite starting only 2 of 5 rounds.
-        self.assertEqual(top[0]["name"], "Cid")
-        self.assertEqual(top[0]["points"], 40)
+    def test_transferred_player_appears_under_both_teams(self):
+        team201 = {p["name"]: p for p in self.d["players"]["scorers_by_manager"]["201"]}
+        team202 = {p["name"]: p for p in self.d["players"]["scorers_by_manager"]["202"]}
+        self.assertEqual((team201["Ann"]["points"], team201["Ann"]["starts"]), (10, 2))
+        self.assertEqual((team202["Ann"]["points"], team202["Ann"]["starts"]), (9, 3))
+
+    def test_no_leftover_low_scorer_fields(self):
+        self.assertNotIn("low_by_manager", self.d["players"])
+        self.assertNotIn("low_scorers_min_starts", self.d["players"])
+        self.assertNotIn("top_by_manager", self.d["players"])
 
 
 if __name__ == "__main__":

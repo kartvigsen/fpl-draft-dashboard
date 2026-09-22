@@ -14,7 +14,6 @@ list; round scores are derived):
     separate stat.
 """
 import json
-import math
 import statistics
 import sys
 from datetime import datetime, timezone
@@ -270,23 +269,22 @@ def build(raw=RAW, now=None):
         moves.append(row)
 
     # ---- player insights ------------------------------------------------
-    # A player qualifies for "lowest scorers" only once started in at least
-    # 60% of finished rounds so far (rounded up), so a one-off substitute
-    # can't look like the league's worst starter.
-    min_starts = math.ceil(0.6 * len(complete)) if complete else 0
-    top_players, low_players, best_rounds = {}, {}, []
+    # Every player who scored a positive total while in a manager's starting
+    # XI, one list per manager. The same real player can appear under more
+    # than one manager if they were traded mid-season.
+    scorers_by_manager, best_rounds = {}, []
     for e in eids:
         rows = []
         for el, by_gw in contrib[e].items():
             fin = {g: v for g, v in by_gw.items() if g in complete}
             if not fin:
                 continue
-            rows.append({**pinfo(el), "points": sum(fin.values()), "starts": len(fin)})
             for g, v in fin.items():
                 best_rounds.append({**pinfo(el), "points": v, "gw": g, "entry_id": e})
-        top_players[str(e)] = sorted(rows, key=lambda r: (-r["points"], r["name"]))[:5]
-        qualifying = [r for r in rows if r["starts"] >= min_starts]
-        low_players[str(e)] = sorted(qualifying, key=lambda r: (r["points"], -r["starts"], r["name"]))[:5]
+            pts = sum(fin.values())
+            if pts > 0:
+                rows.append({**pinfo(el), "points": pts, "starts": len(fin)})
+        scorers_by_manager[str(e)] = sorted(rows, key=lambda r: (-r["points"], r["name"]))
     best_rounds.sort(key=lambda r: (-r["points"], r["gw"]))
 
     bench = {}
@@ -350,8 +348,7 @@ def build(raw=RAW, now=None):
                    "rank": {str(e): rank_by_gw[e] for e in eids}},
         "records": records,
         "transactions": {"matrix": tx_matrix, "moves": moves},
-        "players": {"top_by_manager": top_players, "low_by_manager": low_players,
-                    "low_scorers_min_starts": min_starts,
+        "players": {"scorers_by_manager": scorers_by_manager,
                     "best_rounds": best_rounds[:10],
                     "bench": bench, "missed": missed[:10]},
         "checks": checks,

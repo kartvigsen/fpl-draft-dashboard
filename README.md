@@ -47,16 +47,28 @@ If you use the included `.github/workflows/update.yml`, the dashboard rebuilds i
 - **Rounds won:** the top score among all managers in a gameweek. A tie counts as a win for each tied manager.
 - **Transactions:** accepted moves only. Denied bids are shown separately.
 - **Highest and lowest round:** finished gameweeks only.
-- **Lowest scorers (Players tab):** among a manager's starting-XI players, the fewest total points, but only counting players who started at least 60% of the finished rounds so far (rounded up — 3 starts after 5 rounds, 6 after 10). This keeps a single high-scoring substitute appearance from looking like your worst starter. Ties go to whoever started more rounds.
+
+## Rounds tab
+
+- **Every round** shades each score from red (lowest that round) through orange and yellow to green (highest), on top of the existing ▲/▼ markers for the top and lowest score.
+- The **Records** table no longer shows "Closest round" (everything else — highest/lowest round, biggest winning margin, longest winning streak — is unchanged).
 
 ## Transactions tab
 
-- **All moves** can be filtered by team, type (free agent/waiver), result (accepted/denied), gameweek and player name (matches either the player brought in or let go). It shows 12 rows at a time with a "Show all" button; changing a filter goes back to 12 rows of the new, filtered list.
+- **All moves** can be filtered by team, type (free agent/waiver), result (accepted/denied), gameweek and player name (matches either the player brought in or let go). It shows 12 rows at a time with a "Show all" button; changing a filter goes back to 12 rows of the new, filtered list. There's no Net/points column here — see the Players tab for scoring.
 - **Moves per gameweek** (the heat map) lists teams by current league standing, not by the order they were added to the league.
+
+## Players tab
+
+One list per team of every player who scored a positive total while in that manager's starting XI, most points first. The top 5 show directly; the rest fold out under "Show N more players". A player who was traded mid-season appears under both teams, with the points they scored for each. Teams are laid out two per row.
 
 ## Feedback
 
-The **Feedback** button in the header (and the **Feedback** tab) opens a new GitHub issue on this repository, with the tab you were viewing pre-filled in the title and body. The Feedback tab also lists the repository's existing issues (title, status, author, date, reply count), fetched live from the public GitHub API in your browser — no server involved. Pull requests are filtered out, and only `https://github.com/` links are ever followed. If GitHub rate-limits the request, the tab shows a message and a **Retry** button instead of breaking.
+The **Feedback** button in the header (and the **Feedback** tab) opens a new GitHub issue on this repository, labeled `feedback`, with the tab you were viewing pre-filled in the title and body. The Feedback tab also has its own box to type feedback directly — it opens the same pre-filled issue, just with your text in the body instead. You'll need a GitHub account to actually post it, since the site itself has nowhere to store submissions (no server, no database).
+
+Below the box, the tab lists every `feedback`-labeled issue on this repository (title, status, author, date, reply count), fetched live from the public GitHub API in your browser. **Implemented** (green) means the issue has been closed; **Open** (red) means it hasn't yet — mark one implemented by closing it on GitHub. Pull requests are filtered out, and only `https://github.com/` links are ever followed. If GitHub rate-limits the request, the tab shows a message and a **Retry** button instead of breaking.
+
+`feedback:in-progress` and `feedback:needs-input` are reserved labels: they mark a feedback issue that's already been picked up (a PR is open against it, or it needs clarification from whoever filed it) so it isn't picked up again. Nothing currently applies them automatically — see the note below.
 
 ## New season
 
