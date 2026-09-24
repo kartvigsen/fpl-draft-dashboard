@@ -27,7 +27,7 @@ def _dump(root, rel, obj):
 def write_raw(root, gw_scores, current_finished=False, subs=None, bench=None,
               transactions=None, league_name="Demo League", people=None,
               spread=False, seed=1, official=None, standings_ok=True,
-              free_agent_points=None):
+              free_agent_points=None, element_status=None, draft_choices=None):
     """gw_scores: list (per gameweek) of per-manager XI point targets.
 
     The last gameweek is the current one. It is treated as in progress unless
@@ -121,7 +121,8 @@ def write_raw(root, gw_scores, current_finished=False, subs=None, bench=None,
             _dump(root, f"entries/{eid}/gw{gw}.json", body)
 
     _dump(root, "transactions.json", transactions or [])
-    _dump(root, "element_status.json", {"element_status": []})
+    _dump(root, "element_status.json", {"element_status": element_status or []})
+    _dump(root, "draft_choices.json", draft_choices if draft_choices is not None else [])
     standings = []
     for m, eid in enumerate(entry_ids):
         total = totals[m] if standings_ok else totals[m] + 1

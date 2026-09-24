@@ -226,6 +226,87 @@ class BuildTest(unittest.TestCase):
             shutil.rmtree(d2, ignore_errors=True)
 
 
+def write_all_players_fixture(root):
+    """A minimal league (no gameweeks played yet) with three Premier League
+    players in three different ownership situations, to check the "all
+    players" list independently of the scoring logic:
+
+    PlayerA (501): currently owned by entry 101. points_per_game present.
+    PlayerB (502): a free agent now, but was dropped by entry 101 earlier
+        (an accepted transaction) -- so still counts as "ever owned".
+    PlayerC (503): never owned, never transacted -- a pure free agent.
+        points_per_game is blank, so the average falls back to
+        total_points / starts.
+    """
+    _dump(root, "game.json", {"current_event": 0, "current_event_finished": False})
+    _dump(root, "bootstrap.json", {
+        "elements": [
+            {"id": 501, "web_name": "Ann", "element_type": 1, "team": 1,
+             "total_points": 80, "points_per_game": "8.0", "starts": 10},
+            {"id": 502, "web_name": "Ben", "element_type": 2, "team": 2,
+             "total_points": 30, "points_per_game": None, "starts": 5},
+            {"id": 503, "web_name": "Cid", "element_type": 3, "team": 1,
+             "total_points": 10, "points_per_game": "", "starts": 0},
+        ],
+        "teams": [{"id": 1, "short_name": "ARS"}, {"id": 2, "short_name": "AVL"}],
+    })
+    _dump(root, "element_status.json", {"element_status": [
+        {"element": 501, "owner": 101, "status": "o"},
+        {"element": 502, "owner": None, "status": "a"},
+        {"element": 503, "owner": None, "status": "a"},
+    ]})
+    _dump(root, "transactions.json", [
+        {"id": 1, "event": 1, "entry": 101, "kind": "f", "result": "a",
+         "element_in": 501, "element_out": 502, "added": "2026-08-01T10:00:00Z"},
+    ])
+    _dump(root, "league_details.json", {
+        "league": {"id": 1, "name": "Solo League"},
+        "league_entries": [{"entry_id": 101, "id": 9001, "entry_name": "Solo Team",
+                            "player_first_name": "Sam", "player_last_name": "Solo",
+                            "short_name": "SOL"}],
+        "standings": [{"league_entry": 9001, "total": 0}],
+    })
+
+
+class AllPlayersTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        write_all_players_fixture(self.tmp)
+        self.d = build_stats.build(self.tmp)
+        self.by_id = {p["id"]: p for p in self.d["all_players"]}
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_every_bootstrap_player_is_included(self):
+        self.assertEqual(set(self.by_id), {501, 502, 503})
+
+    def test_owner_is_the_current_owner_not_who_drafted_or_traded_them(self):
+        self.assertEqual(self.by_id[501]["owner_entry_id"], 101)
+        self.assertIsNone(self.by_id[502]["owner_entry_id"])  # dropped, now a free agent
+        self.assertIsNone(self.by_id[503]["owner_entry_id"])
+
+    def test_ever_owned_covers_current_owners_and_past_transactions(self):
+        self.assertTrue(self.by_id[501]["ever_owned"])
+        self.assertTrue(self.by_id[502]["ever_owned"])   # free agent now, but was traded
+        self.assertFalse(self.by_id[503]["ever_owned"])  # untouched all season
+
+    def test_average_uses_points_per_game_when_present(self):
+        self.assertEqual(self.by_id[501]["avg_points"], 8.0)
+
+    def test_average_falls_back_to_total_points_over_starts(self):
+        self.assertEqual(self.by_id[502]["avg_points"], 6.0)  # 30 / 5
+
+    def test_average_is_zero_not_a_crash_when_starts_is_zero(self):
+        self.assertEqual(self.by_id[503]["avg_points"], 0.0)
+
+    def test_name_club_and_position_come_from_bootstrap(self):
+        self.assertEqual((self.by_id[501]["name"], self.by_id[501]["club"], self.by_id[501]["pos"]),
+                         ("Ann", "ARS", "GKP"))
+        self.assertEqual(self.by_id[502]["pos"], "DEF")
+        self.assertEqual(self.by_id[503]["pos"], "MID")
+
+
 class ScorersByTeamTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())

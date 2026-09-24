@@ -398,7 +398,7 @@ if (!D.checks.all_ok) app.append(h("div", { class: "banner" }, h("strong", {}, "
   "some calculated scores do not match the site's own standings. See “Data checks” at the bottom."));
 
 /* tabs */
-const TABS = [["overview", "Overview"], ["rounds", "Rounds"], ["transactions", "Transactions"], ["players", "Players"], ["feedback", "Feedback"]];
+const TABS = [["overview", "Overview"], ["rounds", "Rounds"], ["transactions", "Transactions"], ["players", "Players"], ["allplayers", "All players"], ["feedback", "Feedback"]];
 const anchor = h("div");
 const tabbar = h("div", { class: "tabs", role: "tablist", "aria-label": "Dashboard sections" });
 const panels = {}, tabBtns = {};
@@ -700,6 +700,94 @@ if (gws.length) {
       h("span", {}, h("span", { class: "who" }, dot(byId[p.entry_id]), p.name), h("span", { class: "meta" }, `${nameOf(byId[p.entry_id])}, GW${p.gw}`)),
       h("span", { class: "win num" }, p.points))))));
 } else pg.append(emptyMsg("Player insights appear after the first gameweek is finished."));
+
+/* all players */
+pg = panels.allplayers;
+{
+  const AP = D.all_players || [];
+  const clubs = [...new Set(AP.map(p => p.club))].filter(Boolean).sort();
+  const positions = ["GKP", "DEF", "MID", "FWD"];
+  let sortKey = "total_points", sortDir = -1, showEveryone = false;
+
+  const ownerOf = p => p.owner_entry_id == null ? "Free agent" : nameOf(byId[p.owner_entry_id]);
+  const COLS = [
+    { key: "name", label: "Player", num: false, get: p => p.name },
+    { key: "club", label: "Club", num: false, get: p => p.club },
+    { key: "pos", label: "Position", num: false, get: p => p.pos },
+    { key: "draft_pick", label: "Draft rank", num: true, get: p => p.draft_pick == null ? Infinity : p.draft_pick },
+    { key: "owner", label: "Owner", num: false, get: ownerOf },
+    { key: "total_points", label: "Total points", num: true, get: p => p.total_points },
+    { key: "avg_points", label: "Avg points", num: true, get: p => p.avg_points },
+  ];
+
+  const ownerSel = h("select", { "aria-label": "Filter by owner", onchange: () => render() },
+    h("option", { value: "" }, "All owners"), h("option", { value: "free" }, "Free agent"),
+    ranked.map(m => h("option", { value: m.entry_id }, nameOf(m))));
+  const posSel = h("select", { "aria-label": "Filter by position", onchange: () => render() },
+    h("option", { value: "" }, "All positions"), positions.map(p => h("option", { value: p }, p)));
+  const clubSel = h("select", { "aria-label": "Filter by club", onchange: () => render() },
+    h("option", { value: "" }, "All clubs"), clubs.map(c => h("option", { value: c }, c)));
+  const nameInput = h("input", { type: "search", placeholder: "Player name", "aria-label": "Filter by player name", oninput: () => render() });
+  const everyoneToggle = h("input", { type: "checkbox", onchange: () => { showEveryone = everyoneToggle.checked; render(); } });
+
+  const theadRow = h("tr", {});
+  const body = h("tbody", {});
+  const countNote = h("p", { class: "sub" });
+
+  function row(p) {
+    return h("tr", {},
+      h("td", { class: "l" }, p.name), h("td", { class: "l" }, p.club), h("td", { class: "l" }, p.pos),
+      h("td", { class: "num" }, p.draft_pick == null ? "–" : `Pick ${p.draft_pick}`),
+      h("td", { class: "l" }, ownerOf(p)),
+      h("td", { class: "num" }, fmt(p.total_points)), h("td", { class: "num" }, p.avg_points.toFixed(1)));
+  }
+  function filtered() {
+    const owner = ownerSel.value, pos = posSel.value, club = clubSel.value, name = nameInput.value.trim().toLowerCase();
+    return AP.filter(p => {
+      if (!showEveryone && !p.ever_owned) return false;
+      if (owner === "free" && p.owner_entry_id != null) return false;
+      if (owner && owner !== "free" && String(p.owner_entry_id) !== owner) return false;
+      if (pos && p.pos !== pos) return false;
+      if (club && p.club !== club) return false;
+      if (name && !p.name.toLowerCase().includes(name)) return false;
+      return true;
+    });
+  }
+  function sortBy(key) {
+    const col = COLS.find(c => c.key === key);
+    if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = col.num ? -1 : 1; }
+    render();
+  }
+  function render() {
+    const col = COLS.find(c => c.key === sortKey);
+    const list = filtered();
+    const sorted = [...list].sort((a, b) => {
+      const av = col.get(a), bv = col.get(b);
+      return (col.num ? av - bv : String(av).localeCompare(String(bv))) * sortDir;
+    });
+    body.textContent = "";
+    if (!sorted.length) body.append(h("tr", {}, h("td", { class: "l", colspan: COLS.length }, emptyMsg("No players match these filters."))));
+    else body.append(...sorted.map(row));
+    countNote.textContent = `${fmt(sorted.length)} of ${fmt(AP.length)} players shown.`;
+    theadRow.textContent = "";
+    for (const c of COLS) {
+      const active = c.key === sortKey;
+      theadRow.append(h("th", { class: c.num ? "" : "l", role: "button", tabindex: "0",
+        "aria-sort": active ? (sortDir === 1 ? "ascending" : "descending") : "none",
+        onclick: () => sortBy(c.key),
+        onkeydown: ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); sortBy(c.key); } } },
+        c.label + (active ? (sortDir === 1 ? " ▲" : " ▼") : "")));
+    }
+  }
+  render();
+  pg.append(section("All players"));
+  pg.append(card("Every Premier League player", "Filter, search and sort by clicking a column. Defaults to players who are or have been owned in this league this season.",
+    h("div", { class: "filters" }, ownerSel, posSel, clubSel, nameInput),
+    h("label", { style: "display:flex;align-items:center;gap:6px;margin:2px 0 12px;font-size:13px;color:var(--ink-2)" },
+      everyoneToggle, "Show every player, including ones never owned this season"),
+    countNote,
+    h("div", { class: "tbl-wrap" }, h("table", {}, h("thead", {}, theadRow), body))));
+}
 
 /* feedback */
 pg = panels.feedback;

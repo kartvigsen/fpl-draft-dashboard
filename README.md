@@ -16,7 +16,7 @@ python3 update.py
 
 Then open `docs/index.html` in a browser. That is the whole routine.
 
-The dashboard has five tabs: Overview, Rounds, Transactions, Players and Feedback. You can link straight to one, for example `index.html#rounds`.
+The dashboard has six tabs: Overview, Rounds, Transactions, Players, All players and Feedback. You can link straight to one, for example `index.html#rounds`.
 
 - Run it once the gameweek is finished. A gameweek still in progress is shown as "live" and is not counted in records or rounds won.
 - Finished gameweeks are cached in `data/raw/`, so later runs only download the newest gameweek.
@@ -61,6 +61,16 @@ If you use the included `.github/workflows/update.yml`, the dashboard rebuilds i
 ## Players tab
 
 One table per team of every player who scored a positive total while in that manager's starting XI, with columns for starts, points and average points per start — click a column header to sort by it (click again to reverse). Sorted by points by default; the top 5 show directly and the rest fold out under "Show N more players". A player who was traded mid-season appears under both teams, with the points they scored for each. Teams are laid out two per row.
+
+## All players tab
+
+Every Premier League player, not just the ones on a roster in this league — filter by owner (including "Free agent"), position or club, or search by name, and click a column header to sort (click again to reverse). Columns:
+
+- **Draft rank** — the pick number from this league's original season draft (e.g. "Pick 23"). A player never drafted (picked up later, or never owned at all) shows "–".
+- **Owner** — whoever currently holds the player, which can differ from who drafted them if they moved by waiver or trade.
+- **Total points** / **Avg points** — the player's actual Premier League season total and per-game average, regardless of whether their fantasy owner ever started them.
+
+The table defaults to players who are or have been owned in this league this season (drafted, waivered or traded at some point) — tick "Show every player" to see the full Premier League player pool, useful for scouting free agents.
 
 ## Feedback
 

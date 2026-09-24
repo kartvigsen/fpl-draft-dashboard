@@ -87,6 +87,7 @@ def collect(force=False, log=print):
     save("bootstrap.json", get_json("bootstrap-static"))
     save("transactions.json", get_json(f"draft/league/{league_id}/transactions"))
     save("element_status.json", get_json(f"league/{league_id}/element-status"))
+    save("draft_choices.json", get_json(f"draft/{league_id}/choices"))
     entry_ids = [e["entry_id"] for e in details.get("league_entries", [])]
     log(f"League '{details.get('league', {}).get('name')}' with {len(entry_ids)} managers")
 

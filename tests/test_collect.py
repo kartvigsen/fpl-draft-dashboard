@@ -47,6 +47,7 @@ class CollectTest(unittest.TestCase):
         elif parts[0] == "league" and parts[2] == "details": f = "league_details.json"
         elif parts[0] == "league" and parts[2] == "element-status": f = "element_status.json"
         elif parts[:2] == ["draft", "league"] and parts[3] == "transactions": f = "transactions.json"
+        elif parts[0] == "draft" and parts[2] == "choices": f = "draft_choices.json"
         elif parts[0] == "event" and parts[2] == "live": f = f"live/gw{parts[1]}.json"
         elif parts[0] == "entry" and parts[2] == "event": f = f"entries/{parts[1]}/gw{parts[3]}.json"
         else: raise AssertionError("unexpected endpoint " + path)
@@ -99,6 +100,12 @@ class CollectTest(unittest.TestCase):
         self.calls.clear()
         collect.collect(log=lambda *_: None)
         self.assertEqual(sum(1 for c in self.calls if c.startswith("event/")), 5)
+
+    def test_draft_choices_are_fetched_and_cached(self):
+        collect.collect(log=lambda *_: None)
+        self.assertIn("draft/7281/choices", self.calls)
+        cached = json.loads((self.out / "draft_choices.json").read_text())
+        self.assertEqual(cached, json.loads((self.api / "draft_choices.json").read_text()))
 
     def test_gameweek_becomes_final_once_finished(self):
         collect.collect(log=lambda *_: None)
