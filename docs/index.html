@@ -348,6 +348,36 @@ function card(title, sub, ...kids) {
 function section(title) { return h("h2", {}, title); }
 function emptyMsg(t) { return h("p", { class: "empty" }, t); }
 
+function makeSortHeader(cols, initialKey, initialDir) {
+  let sortKey = initialKey, sortDir = initialDir;
+  function sortBy(key, onChange) {
+    const col = cols.find(c => c.key === key);
+    if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = col.num ? -1 : 1; }
+    onChange();
+  }
+  return {
+    sorted(list) {
+      const col = cols.find(c => c.key === sortKey);
+      return [...list].sort((a, b) => {
+        const av = col.get(a), bv = col.get(b);
+        return (col.num ? av - bv : String(av).localeCompare(String(bv))) * sortDir;
+      });
+    },
+    row(onChange) {
+      const tr = h("tr", {});
+      for (const c of cols) {
+        const active = c.key === sortKey;
+        tr.append(h("th", { class: c.num ? "" : "l", role: "button", tabindex: "0",
+          "aria-sort": active ? (sortDir === 1 ? "ascending" : "descending") : "none",
+          onclick: () => sortBy(c.key, onChange),
+          onkeydown: ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); sortBy(c.key, onChange); } } },
+          c.label + (active ? (sortDir === 1 ? " ▲" : " ▼") : "")));
+      }
+      return tr;
+    },
+  };
+}
+
 function barList(rows, unit) {
   const max = Math.max(1, ...rows.map(r => r.value));
   const wrap = h("div", { class: "bars" });
@@ -640,8 +670,8 @@ if (gws.length) {
     { key: "avg", label: "Avg/start", num: true, get: p => p.points / p.starts },
   ];
   function scorerTable(all) {
-    let sortKey = "points", sortDir = -1;
-    const theadRow = h("tr", {});
+    const sorter = makeSortHeader(SCORER_COLS, "points", -1);
+    const thead = h("thead", {});
     const headBody = h("tbody", {}), restBody = h("tbody", {});
     const summary = h("summary", {});
     const details = h("details", {}, summary, h("div", { class: "tbl-wrap" }, h("table", {}, restBody)));
@@ -649,34 +679,17 @@ if (gws.length) {
       h("td", { class: "l" }, p.name, h("span", { class: "pos" }, p.pos), h("span", { class: "meta" }, ` ${p.team}`)),
       h("td", { class: "num" }, p.starts), h("td", { class: "num" }, p.points),
       h("td", { class: "num" }, (p.points / p.starts).toFixed(1)));
-    function sortBy(key) {
-      const col = SCORER_COLS.find(c => c.key === key);
-      if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = col.num ? -1 : 1; }
-      render();
-    }
     function render() {
-      const col = SCORER_COLS.find(c => c.key === sortKey);
-      const sorted = [...all].sort((a, b) => {
-        const av = col.get(a), bv = col.get(b);
-        return (col.num ? av - bv : String(av).localeCompare(String(bv))) * sortDir;
-      });
+      const sorted = sorter.sorted(all);
       const head = sorted.slice(0, 5), rest = sorted.slice(5);
       headBody.textContent = ""; headBody.append(...head.map(row));
       restBody.textContent = ""; restBody.append(...rest.map(row));
       details.hidden = rest.length === 0;
       summary.textContent = `Show ${rest.length} more player${rest.length === 1 ? "" : "s"}`;
-      theadRow.textContent = "";
-      for (const c of SCORER_COLS) {
-        const active = c.key === sortKey;
-        theadRow.append(h("th", { class: c.num ? "" : "l", role: "button", tabindex: "0",
-          "aria-sort": active ? (sortDir === 1 ? "ascending" : "descending") : "none",
-          onclick: () => sortBy(c.key),
-          onkeydown: ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); sortBy(c.key); } } },
-          c.label + (active ? (sortDir === 1 ? " ▲" : " ▼") : "")));
-      }
+      thead.textContent = ""; thead.append(sorter.row(render));
     }
     render();
-    return h("div", {}, h("div", { class: "tbl-wrap" }, h("table", {}, h("thead", {}, theadRow), headBody)), details);
+    return h("div", {}, h("div", { class: "tbl-wrap" }, h("table", {}, thead, headBody)), details);
   }
   pg.append(section("Scorers by team"));
   pg.append(h("div", { class: "grid-2col" }, ranked.map(m => {
@@ -707,7 +720,7 @@ pg = panels.allplayers;
   const AP = D.all_players || [];
   const clubs = [...new Set(AP.map(p => p.club))].filter(Boolean).sort();
   const positions = ["GKP", "DEF", "MID", "FWD"];
-  let sortKey = "total_points", sortDir = -1, showEveryone = false;
+  let showEveryone = false;
 
   const ownerOf = p => p.owner_entry_id == null ? "Free agent" : nameOf(byId[p.owner_entry_id]);
   const COLS = [
@@ -719,6 +732,7 @@ pg = panels.allplayers;
     { key: "total_points", label: "Total points", num: true, get: p => p.total_points },
     { key: "avg_points", label: "Avg points", num: true, get: p => p.avg_points },
   ];
+  const sorter = makeSortHeader(COLS, "total_points", -1);
 
   const ownerSel = h("select", { "aria-label": "Filter by owner", onchange: () => render() },
     h("option", { value: "" }, "All owners"), h("option", { value: "free" }, "Free agent"),
@@ -730,7 +744,7 @@ pg = panels.allplayers;
   const nameInput = h("input", { type: "search", placeholder: "Player name", "aria-label": "Filter by player name", oninput: () => render() });
   const everyoneToggle = h("input", { type: "checkbox", onchange: () => { showEveryone = everyoneToggle.checked; render(); } });
 
-  const theadRow = h("tr", {});
+  const thead = h("thead", {});
   const body = h("tbody", {});
   const countNote = h("p", { class: "sub" });
 
@@ -753,31 +767,13 @@ pg = panels.allplayers;
       return true;
     });
   }
-  function sortBy(key) {
-    const col = COLS.find(c => c.key === key);
-    if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = col.num ? -1 : 1; }
-    render();
-  }
   function render() {
-    const col = COLS.find(c => c.key === sortKey);
-    const list = filtered();
-    const sorted = [...list].sort((a, b) => {
-      const av = col.get(a), bv = col.get(b);
-      return (col.num ? av - bv : String(av).localeCompare(String(bv))) * sortDir;
-    });
+    const sorted = sorter.sorted(filtered());
     body.textContent = "";
     if (!sorted.length) body.append(h("tr", {}, h("td", { class: "l", colspan: COLS.length }, emptyMsg("No players match these filters."))));
     else body.append(...sorted.map(row));
     countNote.textContent = `${fmt(sorted.length)} of ${fmt(AP.length)} players shown.`;
-    theadRow.textContent = "";
-    for (const c of COLS) {
-      const active = c.key === sortKey;
-      theadRow.append(h("th", { class: c.num ? "" : "l", role: "button", tabindex: "0",
-        "aria-sort": active ? (sortDir === 1 ? "ascending" : "descending") : "none",
-        onclick: () => sortBy(c.key),
-        onkeydown: ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); sortBy(c.key); } } },
-        c.label + (active ? (sortDir === 1 ? " ▲" : " ▼") : "")));
-    }
+    thead.textContent = ""; thead.append(sorter.row(render));
   }
   render();
   pg.append(section("All players"));
@@ -786,7 +782,7 @@ pg = panels.allplayers;
     h("label", { style: "display:flex;align-items:center;gap:6px;margin:2px 0 12px;font-size:13px;color:var(--ink-2)" },
       everyoneToggle, "Show every player, including ones never owned this season"),
     countNote,
-    h("div", { class: "tbl-wrap" }, h("table", {}, h("thead", {}, theadRow), body))));
+    h("div", { class: "tbl-wrap" }, h("table", {}, thead, body))));
 }
 
 /* feedback */

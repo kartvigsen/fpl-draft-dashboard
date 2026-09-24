@@ -106,8 +106,15 @@ class FrontendMarkupTest(unittest.TestCase):
 
     def test_all_players_columns_are_sortable(self):
         header = HTML[HTML.index("/* all players */"):HTML.index("/* feedback */")]
-        self.assertIn('role: "button"', header)
-        self.assertIn("function sortBy(key)", header)
+        self.assertIn("makeSortHeader(COLS", header)
+        self.assertIn("sorter.row(render)", header)
+
+    def test_players_and_all_players_tables_share_one_sort_helper(self):
+        # Both tables should reuse the same helper rather than each
+        # hand-rolling their own click-to-sort/aria-sort/keyboard logic.
+        self.assertEqual(HTML.count("function makeSortHeader("), 1)
+        self.assertIn("makeSortHeader(SCORER_COLS", HTML)
+        self.assertIn("makeSortHeader(COLS", HTML)
 
     def test_feedback_button_and_tab_exist(self):
         self.assertIn('"feedback", "Feedback"', HTML)
