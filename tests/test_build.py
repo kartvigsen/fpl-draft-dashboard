@@ -227,16 +227,21 @@ class BuildTest(unittest.TestCase):
 
 
 def write_all_players_fixture(root):
-    """A minimal league (no gameweeks played yet) with three Premier League
-    players in three different ownership situations, to check the "all
+    """A minimal league (no gameweeks played yet) with four Premier League
+    players in different ownership/draft situations, to check the "all
     players" list independently of the scoring logic:
 
-    PlayerA (501): currently owned by entry 101. points_per_game present.
-    PlayerB (502): a free agent now, but was dropped by entry 101 earlier
-        (an accepted transaction) -- so still counts as "ever owned".
-    PlayerC (503): never owned, never transacted -- a pure free agent.
-        points_per_game is blank, so the average falls back to
-        total_points / starts.
+    PlayerA (501): drafted 1st overall, currently owned by entry 101.
+        points_per_game present.
+    PlayerB (502): drafted 2nd overall, but was dropped by entry 101 later
+        (an accepted transaction) -- a free agent now, still "ever owned".
+    PlayerC (503): never drafted, never owned, never transacted -- a pure
+        free agent. points_per_game is blank, so the average falls back
+        to total_points / starts.
+    PlayerD (504): drafted in round 2, pick 1 of that round -- but the
+        draft API resets "pick" every round, so the real (overall) draft
+        rank is "index", not "pick". Never owned or transacted since, so
+        "ever_owned" must come from the draft history alone.
     """
     _dump(root, "game.json", {"current_event": 0, "current_event_finished": False})
     _dump(root, "bootstrap.json", {
@@ -247,6 +252,8 @@ def write_all_players_fixture(root):
              "total_points": 30, "points_per_game": None, "starts": 5},
             {"id": 503, "web_name": "Cid", "element_type": 3, "team": 1,
              "total_points": 10, "points_per_game": "", "starts": 0},
+            {"id": 504, "web_name": "Dez", "element_type": 4, "team": 2,
+             "total_points": 20, "points_per_game": "4.0", "starts": 5},
         ],
         "teams": [{"id": 1, "short_name": "ARS"}, {"id": 2, "short_name": "AVL"}],
     })
@@ -254,11 +261,17 @@ def write_all_players_fixture(root):
         {"element": 501, "owner": 101, "status": "o"},
         {"element": 502, "owner": None, "status": "a"},
         {"element": 503, "owner": None, "status": "a"},
+        {"element": 504, "owner": None, "status": "a"},
     ]})
     _dump(root, "transactions.json", [
         {"id": 1, "event": 1, "entry": 101, "kind": "f", "result": "a",
          "element_in": 501, "element_out": 502, "added": "2026-08-01T10:00:00Z"},
     ])
+    _dump(root, "draft_choices.json", {"choices": [
+        {"element": 501, "entry": 101, "round": 1, "pick": 1, "index": 1},
+        {"element": 502, "entry": 102, "round": 1, "pick": 2, "index": 2},
+        {"element": 504, "entry": 102, "round": 2, "pick": 1, "index": 5},
+    ]})
     _dump(root, "league_details.json", {
         "league": {"id": 1, "name": "Solo League"},
         "league_entries": [{"entry_id": 101, "id": 9001, "entry_name": "Solo Team",
@@ -279,7 +292,23 @@ class AllPlayersTest(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def test_every_bootstrap_player_is_included(self):
-        self.assertEqual(set(self.by_id), {501, 502, 503})
+        self.assertEqual(set(self.by_id), {501, 502, 503, 504})
+
+    def test_draft_pick_uses_overall_index_not_the_per_round_pick(self):
+        # Player D was pick 1 of round 2, which resets each round -- the
+        # real overall draft rank is index 5, not the per-round pick 1.
+        self.assertEqual(self.by_id[504]["draft_pick"], 5)
+        self.assertEqual(self.by_id[501]["draft_pick"], 1)
+        self.assertEqual(self.by_id[502]["draft_pick"], 2)
+
+    def test_undrafted_player_has_no_draft_pick(self):
+        self.assertIsNone(self.by_id[503]["draft_pick"])
+
+    def test_ever_owned_via_draft_history_alone(self):
+        # Player D was drafted but never appears in element_status or a
+        # transaction since -- draft history alone must mark it "ever owned".
+        self.assertTrue(self.by_id[504]["ever_owned"])
+        self.assertIsNone(self.by_id[504]["owner_entry_id"])  # currently a free agent
 
     def test_owner_is_the_current_owner_not_who_drafted_or_traded_them(self):
         self.assertEqual(self.by_id[501]["owner_entry_id"], 101)

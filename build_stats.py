@@ -52,6 +52,8 @@ def build(raw=RAW, now=None):
         tx_raw = tx_raw.get("transactions", [])
     status_raw = _load(raw / "element_status.json", {})
     status_list = status_raw.get("element_status", []) if isinstance(status_raw, dict) else (status_raw or [])
+    draft_raw = _load(raw / "draft_choices.json", {})
+    draft_choices = draft_raw.get("choices", []) if isinstance(draft_raw, dict) else (draft_raw or [])
 
     cur = int(game.get("current_event") or 0)
     cur_done = bool(game.get("current_event_finished"))
@@ -184,7 +186,13 @@ def build(raw=RAW, now=None):
     # "owner" in element_status is a manager's entry_id (the same id used
     # everywhere else in this file), or None for a free agent.
     owner_by_element = {s["element"]: s.get("owner") for s in status_list if s.get("owner") is not None}
+    # Draft choices are numbered per round ("pick": 1..N within the round,
+    # resetting each round) and overall ("index": 1, 2, 3... for the whole
+    # draft) -- "index" is the draft rank shown in the UI (e.g. "Pick 23").
+    draft_pick_by_element = {c["element"]: c["index"] for c in draft_choices
+                              if c.get("element") is not None and c.get("index") is not None}
     ever_owned = (set(owner_by_element)
+                  | set(draft_pick_by_element)
                   | {t["element_in"] for t in accepted if t["element_in"] is not None}
                   | {t["element_out"] for t in accepted if t["element_out"] is not None})
 
@@ -209,8 +217,7 @@ def build(raw=RAW, now=None):
             "owner_entry_id": owner_by_element.get(pid_),
             "total_points": p.get("total_points", 0) or 0,
             "avg_points": points_per_game(p),
-            # Filled in once /draft/{league_id}/choices parsing is wired up.
-            "draft_pick": None,
+            "draft_pick": draft_pick_by_element.get(pid_),
             "ever_owned": pid_ in ever_owned,
         })
     all_players.sort(key=lambda r: r["name"])
