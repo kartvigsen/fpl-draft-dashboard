@@ -75,6 +75,47 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("allRoundVals", HTML)
         self.assertIn("const allLo = Math.min(...allRoundVals), allHi = Math.max(...allRoundVals);", HTML)
 
+    def test_all_players_tab_is_between_players_and_feedback(self):
+        tabs_line = re.search(r'const TABS = \[.*?\];', HTML).group(0)
+        order = [k for k in re.findall(r'\["(\w+)",', tabs_line)]
+        self.assertEqual(order.index("allplayers"), order.index("players") + 1)
+        self.assertEqual(order.index("feedback"), order.index("allplayers") + 1)
+
+    def test_all_players_table_has_the_required_columns(self):
+        for key in ("name", "club", "pos", "draft_pick", "owner", "total_points", "avg_points"):
+            self.assertIn(f'key: "{key}"', HTML)
+        self.assertIn("Draft rank", HTML)
+
+    def test_all_players_undrafted_shown_as_dash_not_zero(self):
+        self.assertIn('p.draft_pick == null ? "–"', HTML)
+        self.assertNotIn('`Pick ${p.draft_pick || 0}`', HTML)
+
+    def test_all_players_free_agent_label(self):
+        self.assertIn('"Free agent"', HTML)
+
+    def test_all_players_filters_present(self):
+        self.assertIn('"Filter by owner"', HTML)
+        self.assertIn('"Filter by position"', HTML)
+        self.assertIn('"Filter by club"', HTML)
+        self.assertIn('"Filter by player name"', HTML)
+
+    def test_all_players_defaults_to_ever_owned_with_a_show_everyone_toggle(self):
+        self.assertIn("showEveryone", HTML)
+        self.assertIn("p.ever_owned", HTML)
+        self.assertIn("Show every player", HTML)
+
+    def test_all_players_columns_are_sortable(self):
+        header = HTML[HTML.index("/* all players */"):HTML.index("/* feedback */")]
+        self.assertIn("makeSortHeader(COLS", header)
+        self.assertIn("sorter.row(render)", header)
+
+    def test_players_and_all_players_tables_share_one_sort_helper(self):
+        # Both tables should reuse the same helper rather than each
+        # hand-rolling their own click-to-sort/aria-sort/keyboard logic.
+        self.assertEqual(HTML.count("function makeSortHeader("), 1)
+        self.assertIn("makeSortHeader(SCORER_COLS", HTML)
+        self.assertIn("makeSortHeader(COLS", HTML)
+
     def test_feedback_button_and_tab_exist(self):
         self.assertIn('"feedback", "Feedback"', HTML)
         self.assertIn("openFeedbackIssue", HTML)

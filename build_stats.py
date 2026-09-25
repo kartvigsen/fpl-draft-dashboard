@@ -50,6 +50,10 @@ def build(raw=RAW, now=None):
     tx_raw = _load(raw / "transactions.json", [])
     if isinstance(tx_raw, dict):
         tx_raw = tx_raw.get("transactions", [])
+    status_raw = _load(raw / "element_status.json", {})
+    status_list = status_raw.get("element_status", []) if isinstance(status_raw, dict) else (status_raw or [])
+    draft_raw = _load(raw / "draft_choices.json", {})
+    draft_choices = draft_raw.get("choices", []) if isinstance(draft_raw, dict) else (draft_raw or [])
 
     cur = int(game.get("current_event") or 0)
     cur_done = bool(game.get("current_event_finished"))
@@ -177,6 +181,46 @@ def build(raw=RAW, now=None):
             "element_in": t.get("element_in"), "element_out": t.get("element_out"),
         })
     accepted = [t for t in tx_list if t["result"] == "a"]
+
+    # ---- all Premier League players (not just those rostered here) ------
+    # "owner" in element_status is a manager's entry_id (the same id used
+    # everywhere else in this file), or None for a free agent.
+    owner_by_element = {s["element"]: s.get("owner") for s in status_list if s.get("owner") is not None}
+    # Draft choices are numbered per round ("pick": 1..N within the round,
+    # resetting each round) and overall ("index": 1, 2, 3... for the whole
+    # draft) -- "index" is the draft rank shown in the UI (e.g. "Pick 23").
+    draft_pick_by_element = {c["element"]: c["index"] for c in draft_choices
+                              if c.get("element") is not None and c.get("index") is not None}
+    ever_owned = (set(owner_by_element)
+                  | set(draft_pick_by_element)
+                  | {t["element_in"] for t in accepted if t["element_in"] is not None}
+                  | {t["element_out"] for t in accepted if t["element_out"] is not None})
+
+    def points_per_game(p):
+        raw_ppg = p.get("points_per_game")
+        try:
+            if raw_ppg not in (None, ""):
+                return round(float(raw_ppg), 1)
+        except (TypeError, ValueError):
+            pass
+        starts_ct = p.get("starts") or 0
+        return round((p.get("total_points", 0) or 0) / starts_ct, 1) if starts_ct else 0.0
+
+    all_players = []
+    for p in boot.get("elements", []):
+        pid_ = p["id"]
+        all_players.append({
+            "id": pid_,
+            "name": p.get("web_name") or p.get("second_name") or str(pid_),
+            "club": teams.get(p.get("team"), ""),
+            "pos": POS.get(p.get("element_type"), "?"),
+            "owner_entry_id": owner_by_element.get(pid_),
+            "total_points": p.get("total_points", 0) or 0,
+            "avg_points": points_per_game(p),
+            "draft_pick": draft_pick_by_element.get(pid_),
+            "ever_owned": pid_ in ever_owned,
+        })
+    all_players.sort(key=lambda r: r["name"])
 
     cum, rank_by_gw = {e: [] for e in eids}, {e: [] for e in eids}
     running = {e: 0 for e in eids}
@@ -351,6 +395,7 @@ def build(raw=RAW, now=None):
         "players": {"scorers_by_manager": scorers_by_manager,
                     "best_rounds": best_rounds[:10],
                     "bench": bench, "missed": missed[:10]},
+        "all_players": all_players,
         "checks": checks,
     }
 

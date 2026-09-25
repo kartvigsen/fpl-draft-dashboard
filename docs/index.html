@@ -348,6 +348,36 @@ function card(title, sub, ...kids) {
 function section(title) { return h("h2", {}, title); }
 function emptyMsg(t) { return h("p", { class: "empty" }, t); }
 
+function makeSortHeader(cols, initialKey, initialDir) {
+  let sortKey = initialKey, sortDir = initialDir;
+  function sortBy(key, onChange) {
+    const col = cols.find(c => c.key === key);
+    if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = col.num ? -1 : 1; }
+    onChange();
+  }
+  return {
+    sorted(list) {
+      const col = cols.find(c => c.key === sortKey);
+      return [...list].sort((a, b) => {
+        const av = col.get(a), bv = col.get(b);
+        return (col.num ? av - bv : String(av).localeCompare(String(bv))) * sortDir;
+      });
+    },
+    row(onChange) {
+      const tr = h("tr", {});
+      for (const c of cols) {
+        const active = c.key === sortKey;
+        tr.append(h("th", { class: c.num ? "" : "l", role: "button", tabindex: "0",
+          "aria-sort": active ? (sortDir === 1 ? "ascending" : "descending") : "none",
+          onclick: () => sortBy(c.key, onChange),
+          onkeydown: ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); sortBy(c.key, onChange); } } },
+          c.label + (active ? (sortDir === 1 ? " ▲" : " ▼") : "")));
+      }
+      return tr;
+    },
+  };
+}
+
 function barList(rows, unit) {
   const max = Math.max(1, ...rows.map(r => r.value));
   const wrap = h("div", { class: "bars" });
@@ -398,7 +428,7 @@ if (!D.checks.all_ok) app.append(h("div", { class: "banner" }, h("strong", {}, "
   "some calculated scores do not match the site's own standings. See “Data checks” at the bottom."));
 
 /* tabs */
-const TABS = [["overview", "Overview"], ["rounds", "Rounds"], ["transactions", "Transactions"], ["players", "Players"], ["feedback", "Feedback"]];
+const TABS = [["overview", "Overview"], ["rounds", "Rounds"], ["transactions", "Transactions"], ["players", "Players"], ["allplayers", "All players"], ["feedback", "Feedback"]];
 const anchor = h("div");
 const tabbar = h("div", { class: "tabs", role: "tablist", "aria-label": "Dashboard sections" });
 const panels = {}, tabBtns = {};
@@ -640,8 +670,8 @@ if (gws.length) {
     { key: "avg", label: "Avg/start", num: true, get: p => p.points / p.starts },
   ];
   function scorerTable(all) {
-    let sortKey = "points", sortDir = -1;
-    const theadRow = h("tr", {});
+    const sorter = makeSortHeader(SCORER_COLS, "points", -1);
+    const thead = h("thead", {});
     const headBody = h("tbody", {}), restBody = h("tbody", {});
     const summary = h("summary", {});
     const details = h("details", {}, summary, h("div", { class: "tbl-wrap" }, h("table", {}, restBody)));
@@ -649,34 +679,17 @@ if (gws.length) {
       h("td", { class: "l" }, p.name, h("span", { class: "pos" }, p.pos), h("span", { class: "meta" }, ` ${p.team}`)),
       h("td", { class: "num" }, p.starts), h("td", { class: "num" }, p.points),
       h("td", { class: "num" }, (p.points / p.starts).toFixed(1)));
-    function sortBy(key) {
-      const col = SCORER_COLS.find(c => c.key === key);
-      if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = col.num ? -1 : 1; }
-      render();
-    }
     function render() {
-      const col = SCORER_COLS.find(c => c.key === sortKey);
-      const sorted = [...all].sort((a, b) => {
-        const av = col.get(a), bv = col.get(b);
-        return (col.num ? av - bv : String(av).localeCompare(String(bv))) * sortDir;
-      });
+      const sorted = sorter.sorted(all);
       const head = sorted.slice(0, 5), rest = sorted.slice(5);
       headBody.textContent = ""; headBody.append(...head.map(row));
       restBody.textContent = ""; restBody.append(...rest.map(row));
       details.hidden = rest.length === 0;
       summary.textContent = `Show ${rest.length} more player${rest.length === 1 ? "" : "s"}`;
-      theadRow.textContent = "";
-      for (const c of SCORER_COLS) {
-        const active = c.key === sortKey;
-        theadRow.append(h("th", { class: c.num ? "" : "l", role: "button", tabindex: "0",
-          "aria-sort": active ? (sortDir === 1 ? "ascending" : "descending") : "none",
-          onclick: () => sortBy(c.key),
-          onkeydown: ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); sortBy(c.key); } } },
-          c.label + (active ? (sortDir === 1 ? " ▲" : " ▼") : "")));
-      }
+      thead.textContent = ""; thead.append(sorter.row(render));
     }
     render();
-    return h("div", {}, h("div", { class: "tbl-wrap" }, h("table", {}, h("thead", {}, theadRow), headBody)), details);
+    return h("div", {}, h("div", { class: "tbl-wrap" }, h("table", {}, thead, headBody)), details);
   }
   pg.append(section("Scorers by team"));
   pg.append(h("div", { class: "grid-2col" }, ranked.map(m => {
@@ -700,6 +713,77 @@ if (gws.length) {
       h("span", {}, h("span", { class: "who" }, dot(byId[p.entry_id]), p.name), h("span", { class: "meta" }, `${nameOf(byId[p.entry_id])}, GW${p.gw}`)),
       h("span", { class: "win num" }, p.points))))));
 } else pg.append(emptyMsg("Player insights appear after the first gameweek is finished."));
+
+/* all players */
+pg = panels.allplayers;
+{
+  const AP = D.all_players || [];
+  const clubs = [...new Set(AP.map(p => p.club))].filter(Boolean).sort();
+  const positions = ["GKP", "DEF", "MID", "FWD"];
+  let showEveryone = false;
+
+  const ownerOf = p => p.owner_entry_id == null ? "Free agent" : nameOf(byId[p.owner_entry_id]);
+  const COLS = [
+    { key: "name", label: "Player", num: false, get: p => p.name },
+    { key: "club", label: "Club", num: false, get: p => p.club },
+    { key: "pos", label: "Position", num: false, get: p => p.pos },
+    { key: "draft_pick", label: "Draft rank", num: true, get: p => p.draft_pick == null ? Infinity : p.draft_pick },
+    { key: "owner", label: "Owner", num: false, get: ownerOf },
+    { key: "total_points", label: "Total points", num: true, get: p => p.total_points },
+    { key: "avg_points", label: "Avg points", num: true, get: p => p.avg_points },
+  ];
+  const sorter = makeSortHeader(COLS, "total_points", -1);
+
+  const ownerSel = h("select", { "aria-label": "Filter by owner", onchange: () => render() },
+    h("option", { value: "" }, "All owners"), h("option", { value: "free" }, "Free agent"),
+    ranked.map(m => h("option", { value: m.entry_id }, nameOf(m))));
+  const posSel = h("select", { "aria-label": "Filter by position", onchange: () => render() },
+    h("option", { value: "" }, "All positions"), positions.map(p => h("option", { value: p }, p)));
+  const clubSel = h("select", { "aria-label": "Filter by club", onchange: () => render() },
+    h("option", { value: "" }, "All clubs"), clubs.map(c => h("option", { value: c }, c)));
+  const nameInput = h("input", { type: "search", placeholder: "Player name", "aria-label": "Filter by player name", oninput: () => render() });
+  const everyoneToggle = h("input", { type: "checkbox", onchange: () => { showEveryone = everyoneToggle.checked; render(); } });
+
+  const thead = h("thead", {});
+  const body = h("tbody", {});
+  const countNote = h("p", { class: "sub" });
+
+  function row(p) {
+    return h("tr", {},
+      h("td", { class: "l" }, p.name), h("td", { class: "l" }, p.club), h("td", { class: "l" }, p.pos),
+      h("td", { class: "num" }, p.draft_pick == null ? "–" : `Pick ${p.draft_pick}`),
+      h("td", { class: "l" }, ownerOf(p)),
+      h("td", { class: "num" }, fmt(p.total_points)), h("td", { class: "num" }, p.avg_points.toFixed(1)));
+  }
+  function filtered() {
+    const owner = ownerSel.value, pos = posSel.value, club = clubSel.value, name = nameInput.value.trim().toLowerCase();
+    return AP.filter(p => {
+      if (!showEveryone && !p.ever_owned) return false;
+      if (owner === "free" && p.owner_entry_id != null) return false;
+      if (owner && owner !== "free" && String(p.owner_entry_id) !== owner) return false;
+      if (pos && p.pos !== pos) return false;
+      if (club && p.club !== club) return false;
+      if (name && !p.name.toLowerCase().includes(name)) return false;
+      return true;
+    });
+  }
+  function render() {
+    const sorted = sorter.sorted(filtered());
+    body.textContent = "";
+    if (!sorted.length) body.append(h("tr", {}, h("td", { class: "l", colspan: COLS.length }, emptyMsg("No players match these filters."))));
+    else body.append(...sorted.map(row));
+    countNote.textContent = `${fmt(sorted.length)} of ${fmt(AP.length)} players shown.`;
+    thead.textContent = ""; thead.append(sorter.row(render));
+  }
+  render();
+  pg.append(section("All players"));
+  pg.append(card("Every Premier League player", "Filter, search and sort by clicking a column. Defaults to players who are or have been owned in this league this season.",
+    h("div", { class: "filters" }, ownerSel, posSel, clubSel, nameInput),
+    h("label", { style: "display:flex;align-items:center;gap:6px;margin:2px 0 12px;font-size:13px;color:var(--ink-2)" },
+      everyoneToggle, "Show every player, including ones never owned this season"),
+    countNote,
+    h("div", { class: "tbl-wrap" }, h("table", {}, thead, body))));
+}
 
 /* feedback */
 pg = panels.feedback;
