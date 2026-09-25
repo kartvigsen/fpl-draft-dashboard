@@ -67,10 +67,10 @@ One table per team of every player who scored a positive total while in that man
 Every Premier League player, not just the ones on a roster in this league — filter by owner (including "Free agent"), position or club, or search by name, and click a column header to sort (click again to reverse). Columns:
 
 - **Draft rank** — the pick number from this league's original season draft (e.g. "Pick 23"). A player never drafted (picked up later, or never owned at all) shows "–".
-- **Owner** — whoever currently holds the player, which can differ from who drafted them if they moved by waiver or trade.
+- **Owner** — whoever currently holds the player, which can differ from who drafted them if they moved by waiver or trade. Unowned players are shown as a green "Free agent" pill.
 - **Total points** / **Avg points** — the player's actual Premier League season total and per-game average, regardless of whether their fantasy owner ever started them.
 
-The table defaults to players who are or have been owned in this league this season (drafted, waivered or traded at some point) — tick "Show every player" to see the full Premier League player pool, useful for scouting free agents.
+The table shows the full Premier League player pool by default — untick "Show every player" to narrow it to players who are or have been owned in this league this season (drafted, waivered or traded at some point).
 
 ## Feedback
 

@@ -99,10 +99,16 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn('"Filter by club"', HTML)
         self.assertIn('"Filter by player name"', HTML)
 
-    def test_all_players_defaults_to_ever_owned_with_a_show_everyone_toggle(self):
-        self.assertIn("showEveryone", HTML)
+    def test_all_players_defaults_to_showing_everyone_with_a_toggle_to_narrow_it(self):
+        self.assertIn("let showEveryone = true;", HTML)
+        self.assertIn("everyoneToggle.checked = true;", HTML)
         self.assertIn("p.ever_owned", HTML)
         self.assertIn("Show every player", HTML)
+
+    def test_all_players_free_agent_shown_as_a_green_pill(self):
+        self.assertIn('class: "tag-free"', HTML)
+        self.assertIn(".tag-free {", HTML)
+        self.assertIn("border-radius: 999px", HTML)
 
     def test_all_players_columns_are_sortable(self):
         header = HTML[HTML.index("/* all players */"):HTML.index("/* feedback */")]
