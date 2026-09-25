@@ -24,6 +24,20 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn('"All moves"', HTML)
         self.assertNotIn('"Net"', HTML)
 
+    def test_all_moves_result_is_colour_coded(self):
+        self.assertIn('h("span", { class: ok ? "up" : "down" }, ok ? "Accepted" : "Denied")', HTML)
+
+    def test_scrollable_tables_show_an_edge_shadow(self):
+        # Wide tables (heatmap, all moves, all players, ...) overflow on
+        # narrow screens; a scroll-shadow hints there's more off-screen
+        # without needing JS, matched to whatever background the table
+        # wrapper sits on (surface by default, page in the footer).
+        self.assertIn(".tbl-wrap {", HTML)
+        self.assertIn("--tbl-bg: var(--surface);", HTML)
+        self.assertIn(".foot .tbl-wrap { --tbl-bg: var(--page); }", HTML)
+        self.assertIn("no-repeat local", HTML)
+        self.assertIn("no-repeat scroll", HTML)
+
     def test_all_moves_has_filters_for_team_type_result_gw_and_name(self):
         self.assertIn('"Filter by team"', HTML)
         self.assertIn('"Filter by type"', HTML)

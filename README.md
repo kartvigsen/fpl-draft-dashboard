@@ -55,7 +55,7 @@ If you use the included `.github/workflows/update.yml`, the dashboard rebuilds i
 
 ## Transactions tab
 
-- **All moves** can be filtered by team, type (free agent/waiver), result (accepted/denied), gameweek and player name (matches either the player brought in or let go). It shows 12 rows at a time with a "Show all" button; changing a filter goes back to 12 rows of the new, filtered list. There's no Net/points column here — see the Players tab for scoring.
+- **All moves** can be filtered by team, type (free agent/waiver), result (accepted/denied, shown in green/red), gameweek and player name (matches either the player brought in or let go). It shows 12 rows at a time with a "Show all" button; changing a filter goes back to 12 rows of the new, filtered list. There's no Net/points column here — see the Players tab for scoring.
 - **Moves per gameweek** (the heat map) lists teams by current league standing, not by the order they were added to the league.
 
 ## Players tab
