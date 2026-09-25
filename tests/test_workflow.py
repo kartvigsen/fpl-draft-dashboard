@@ -14,15 +14,15 @@ WORKFLOW = (ROOT / ".github" / "workflows" / "update.yml").read_text(encoding="u
 
 
 class WorkflowScheduleTest(unittest.TestCase):
-    def test_cron_covers_all_four_possible_utc_times(self):
-        # 14:00/18:00 Danish time is 12:00/16:00 UTC in summer (CEST, UTC+2)
-        # and 13:00/17:00 UTC in winter (CET, UTC+1).
-        self.assertIn('cron: "0 12,13,16,17 * * *"', WORKFLOW)
+    def test_cron_covers_all_ten_possible_utc_times(self):
+        # Each of 07:00/12:00/16:00/20:00/23:00 Danish time is one hour
+        # earlier in summer (CEST, UTC+2) than in winter (CET, UTC+1), so
+        # ten UTC cron slots are needed to cover all five year-round.
+        self.assertIn('cron: "0 5,6,10,11,14,15,18,19,21,22 * * *"', WORKFLOW)
 
     def test_gate_step_checks_danish_local_time(self):
         self.assertIn("TZ=Europe/Copenhagen", WORKFLOW)
-        self.assertIn('"$hour" != "14"', WORKFLOW)
-        self.assertIn('"$hour" != "18"', WORKFLOW)
+        self.assertIn("07|12|16|20|23) wanted=true ;;", WORKFLOW)
 
     def test_off_hour_scheduled_runs_skip_the_rest_of_the_job(self):
         self.assertIn("run=false", WORKFLOW)
