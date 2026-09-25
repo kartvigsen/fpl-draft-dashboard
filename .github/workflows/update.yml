@@ -3,11 +3,11 @@ name: Update dashboard
 on:
   schedule:
     # Denmark is UTC+1 (CET, winter) or UTC+2 (CEST, summer), and GitHub
-    # Actions schedules are always UTC, so we list all four UTC times that
-    # could be 14:00 or 18:00 in Denmark. The "Check Danish local time" step
-    # below works out which two of these four runs actually matter and lets
-    # the other two exit immediately.
-    - cron: "0 12,13,16,17 * * *"
+    # Actions schedules are always UTC, so we list both possible UTC times
+    # for each of 07:00/12:00/16:00/20:00/23:00 Danish time. The "Check
+    # Danish local time" step below works out which five of these ten runs
+    # actually matter and lets the other five exit immediately.
+    - cron: "0 5,6,10,11,14,15,18,19,21,22 * * *"
   push:
     branches: [main]
     paths:
@@ -38,8 +38,12 @@ jobs:
         id: gate
         run: |
           hour=$(TZ=Europe/Copenhagen date +%H)
-          if [ "${{ github.event_name }}" = "schedule" ] && [ "$hour" != "14" ] && [ "$hour" != "18" ]; then
-            echo "It's $hour:00 in Denmark, not 14:00 or 18:00 - skipping this scheduled run."
+          case "$hour" in
+            07|12|16|20|23) wanted=true ;;
+            *) wanted=false ;;
+          esac
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$wanted" = "false" ]; then
+            echo "It's $hour:00 in Denmark, not 07:00, 12:00, 16:00, 20:00 or 23:00 - skipping this scheduled run."
             echo "run=false" >> "$GITHUB_OUTPUT"
           else
             echo "run=true" >> "$GITHUB_OUTPUT"

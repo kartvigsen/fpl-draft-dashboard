@@ -40,7 +40,7 @@ The `docs/` folder is a complete static site (`index.html` and `data.js`). Optio
 - **GitHub Pages:** put this project in a GitHub repository and serve the `docs/` folder. Note that a Pages site is public to anyone with the link, and it contains your friends' names and team names.
 - **Just send it:** zip `docs/` and share it, or drop it on any file host.
 
-If you use the included `.github/workflows/update.yml`, the dashboard rebuilds itself automatically twice a day, at 14:00 and 18:00 Danish time (the workflow works out the current UTC offset itself, since Denmark shifts between UTC+1 and UTC+2), and also whenever `docs/index.html`, a top-level `.py` file, `config.json` or the workflow file changes on `main`. You can still trigger it manually from the Actions tab ("Run workflow").
+If you use the included `.github/workflows/update.yml`, the dashboard rebuilds itself automatically five times a day, at 07:00, 12:00, 16:00, 20:00 and 23:00 Danish time (the workflow works out the current UTC offset itself, since Denmark shifts between UTC+1 and UTC+2), and also whenever `docs/index.html`, a top-level `.py` file, `config.json` or the workflow file changes on `main`. You can still trigger it manually from the Actions tab ("Run workflow").
 
 ## Rules used
 
