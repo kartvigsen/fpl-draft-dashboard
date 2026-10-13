@@ -31,6 +31,43 @@ def _element_status(n_m):
     return {"element_status": status}
 
 
+# A generic, recognisable 20-club Premier League set for the Fixtures tab --
+# not tied to any specific real season, just illustrative demo data.
+_CLUBS = [
+    ("Arsenal", "ARS"), ("Aston Villa", "AVL"), ("Bournemouth", "BOU"), ("Brentford", "BRE"),
+    ("Brighton", "BHA"), ("Burnley", "BUR"), ("Chelsea", "CHE"), ("Crystal Palace", "CRY"),
+    ("Everton", "EVE"), ("Fulham", "FUL"), ("Liverpool", "LIV"), ("Luton Town", "LUT"),
+    ("Manchester City", "MCI"), ("Manchester United", "MUN"), ("Newcastle United", "NEW"),
+    ("Nottingham Forest", "NFO"), ("Sheffield United", "SHU"), ("Tottenham Hotspur", "TOT"),
+    ("West Ham United", "WHU"), ("Wolverhampton Wanderers", "WOL"),
+]
+
+
+def _classic_teams(rng):
+    return [{"id": i + 1, "name": name, "short_name": short,
+             "strength_overall_home": rng.randint(2, 5), "strength_overall_away": rng.randint(1, 4)}
+            for i, (name, short) in enumerate(_CLUBS)]
+
+
+def _fixtures(rng, teams, start_gw=7, n_gw=7):
+    """A simple shuffled round-robin from start_gw, enough future fixtures
+    that every team has at least 5 upcoming."""
+    ids = [t["id"] for t in teams]
+    fixtures = []
+    for gw in range(start_gw, start_gw + n_gw):
+        order = ids[:]
+        rng.shuffle(order)
+        day = min(17 + (gw - start_gw) * 7, 28)
+        for i in range(0, len(order) - 1, 2):
+            fixtures.append({
+                "event": gw, "team_h": order[i], "team_a": order[i + 1],
+                "kickoff_time": f"2026-10-{day:02d}T15:00:00Z",
+                "team_h_difficulty": rng.randint(1, 5), "team_a_difficulty": rng.randint(1, 5),
+                "finished": False,
+            })
+    return fixtures
+
+
 def _draft_choices(n_m):
     """A snake draft over the squads: round = squad slot, "pick" resets each
     round (1..n_m), "index" is the real overall draft position."""
@@ -65,13 +102,18 @@ def main(gws=11, seed=7):
                                mock.FREE_AGENT_BASE + rng.randrange(12), None,
                                added=f"2026-09-{min(gw + 1, 28):02d}T07:00:00Z"))
             tid += 1
+    fixtures_rng = random.Random(seed + 1)  # separate stream, doesn't perturb the scores above
+    classic_teams = _classic_teams(fixtures_rng)
+
     tmp = Path(tempfile.mkdtemp())
     mock.write_raw(tmp, scores, current_finished=False, spread=True, seed=seed, transactions=txs,
                    league_name="Demo League (invented data)",
                    people=[("Alex", "Andersen", "Team Alpha"), ("Bo", "Berg", "Team Bravo"),
                            ("Cleo", "Clausen", "Team Charlie"), ("Dan", "Dahl", "Team Delta")],
                    element_status=_element_status(n_m)["element_status"],
-                   draft_choices=_draft_choices(n_m))
+                   draft_choices=_draft_choices(n_m),
+                   classic_teams=classic_teams,
+                   fixtures=_fixtures(fixtures_rng, classic_teams))
 
     # mock.write_raw doesn't invent season-long PL stats for each player, but
     # the All players tab reads them, so add plausible ones for the demo.

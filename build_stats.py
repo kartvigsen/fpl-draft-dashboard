@@ -54,6 +54,8 @@ def build(raw=RAW, now=None):
     status_list = status_raw.get("element_status", []) if isinstance(status_raw, dict) else (status_raw or [])
     draft_raw = _load(raw / "draft_choices.json", {})
     draft_choices = draft_raw.get("choices", []) if isinstance(draft_raw, dict) else (draft_raw or [])
+    classic_teams = _load(raw / "classic_teams.json", []) or []
+    fixtures_raw = _load(raw / "fixtures.json", []) or []
 
     cur = int(game.get("current_event") or 0)
     cur_done = bool(game.get("current_event_finished"))
@@ -221,6 +223,44 @@ def build(raw=RAW, now=None):
             "ever_owned": pid_ in ever_owned,
         })
     all_players.sort(key=lambda r: r["name"])
+
+    # ---- next 5 fixtures per Premier League team (for the Fixtures tab) --
+    # Real-world PL fixtures/team strength, unrelated to this draft league.
+    # "Favourite" compares both sides' overall strength for that specific
+    # fixture (home team's home-strength vs away team's away-strength, or
+    # vice versa) -- not just this team's own 1-5 difficulty rating, which
+    # only reflects the opponent's strength from this team's perspective.
+    teams_by_id = {t["id"]: t for t in classic_teams if t.get("id") is not None}
+
+    def team_strength(team_id, home):
+        t = teams_by_id.get(team_id, {})
+        return t.get("strength_overall_home" if home else "strength_overall_away")
+
+    fixtures_by_team = []
+    for tid, t in sorted(teams_by_id.items(), key=lambda kv: kv[1].get("name", "")):
+        own = [f for f in fixtures_raw if f.get("team_h") == tid or f.get("team_a") == tid]
+        own.sort(key=lambda f: (f.get("event") if f.get("event") is not None else 9999, f.get("kickoff_time") or ""))
+        rows = []
+        for f in own[:5]:
+            home = f.get("team_h") == tid
+            opp_id = f.get("team_a") if home else f.get("team_h")
+            opp = teams_by_id.get(opp_id, {})
+            own_str = team_strength(tid, home)
+            opp_str = team_strength(opp_id, not home)
+            favourite = (None if own_str is None or opp_str is None or own_str == opp_str
+                         else own_str > opp_str)
+            rows.append({
+                "gw": f.get("event"),
+                "opponent": opp.get("short_name", "?"),
+                "home": home,
+                "difficulty": f.get("team_h_difficulty") if home else f.get("team_a_difficulty"),
+                "favourite": favourite,
+                "kickoff": f.get("kickoff_time"),
+            })
+        fixtures_by_team.append({
+            "id": tid, "name": t.get("name", ""), "short_name": t.get("short_name", ""),
+            "fixtures": rows,
+        })
 
     cum, rank_by_gw = {e: [] for e in eids}, {e: [] for e in eids}
     running = {e: 0 for e in eids}
@@ -410,6 +450,7 @@ def build(raw=RAW, now=None):
                     "best_rounds": best_rounds[:10],
                     "bench": bench, "missed": missed[:10]},
         "all_players": all_players,
+        "fixtures_by_team": fixtures_by_team,
         "checks": checks,
     }
 

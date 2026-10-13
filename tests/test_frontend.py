@@ -124,6 +124,22 @@ class FrontendMarkupTest(unittest.TestCase):
         players_section = HTML[HTML.index('pg = panels.players;'):HTML.index('/* all players */')]
         self.assertNotIn("Squad by overall rank bracket", players_section)
 
+    def test_fixtures_tab_shows_next_five_with_fdr_colours_and_favourite_marker(self):
+        self.assertIn('"fixtures", "Fixtures"', HTML)
+        self.assertIn("D.fixtures_by_team", HTML)
+        self.assertIn("--fdr-1", HTML)
+        self.assertIn("--fdr-5", HTML)
+        self.assertIn('f.favourite === true ? h("span", { class: "fav" }, "★") : null', HTML)
+        self.assertIn('`Fixture ${i + 1}`', HTML)
+
+    def test_fixtures_tab_has_an_fdr_legend(self):
+        self.assertIn('h("ul", { class: "legend" }, [1, 2, 3, 4, 5].map(', HTML)
+        self.assertIn('"Easy"', HTML)
+        self.assertIn('"Hard"', HTML)
+
+    def test_fixtures_tab_handles_no_fixture_data(self):
+        self.assertIn("isn't available yet", HTML)
+
     def test_scorer_table_is_sortable_by_name_starts_points_and_avg(self):
         self.assertIn('key: "name"', HTML)
         self.assertIn('key: "starts"', HTML)
@@ -152,7 +168,8 @@ class FrontendMarkupTest(unittest.TestCase):
         tabs_line = re.search(r'const TABS = \[.*?\];', HTML).group(0)
         order = [k for k in re.findall(r'\["(\w+)",', tabs_line)]
         self.assertEqual(order.index("allplayers"), order.index("players") + 1)
-        self.assertEqual(order.index("feedback"), order.index("allplayers") + 1)
+        self.assertEqual(order.index("fixtures"), order.index("allplayers") + 1)
+        self.assertEqual(order.index("feedback"), order.index("fixtures") + 1)
 
     def test_all_players_table_has_the_required_columns(self):
         for key in ("name", "club", "pos", "draft_pick", "owner", "total_points", "avg_points"):

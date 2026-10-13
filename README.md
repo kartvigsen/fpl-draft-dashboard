@@ -16,7 +16,7 @@ python3 update.py
 
 Then open `docs/index.html` in a browser. That is the whole routine.
 
-The dashboard has six tabs: Overview, Rounds, Transactions, Players, All players and Feedback. You can link straight to one, for example `index.html#rounds`.
+The dashboard has seven tabs: Overview, Rounds, Transactions, Players, All players, Fixtures and Feedback. You can link straight to one, for example `index.html#rounds`.
 
 - Run it any time, including while a gameweek is still in progress — standings and each manager's total points update live. Records and "rounds won" still only count once a gameweek finishes, since bonus points and other adjustments aren't final until then.
 - Finished gameweeks are cached in `data/raw/`, so later runs only download the newest gameweek.
@@ -75,6 +75,12 @@ Every Premier League player, not just the ones on a roster in this league — fi
 
 The table shows the full Premier League player pool by default — untick "Show every player" to narrow it to players who are or have been owned in this league this season (drafted, waivered or traded at some point).
 
+## Fixtures tab
+
+Every Premier League team's next five fixtures (real match fixtures, nothing to do with this draft league), coloured by that team's own FPL difficulty rating (FDR): 1 (easiest, dark green) through 5 (hardest, dark red). A ★ marks a fixture where the team is the stronger side, comparing both teams' home/away strength ratings for that specific match — not just this team's own difficulty colour, which only reflects the opponent's strength from this team's point of view. Hover a fixture for the gameweek, venue and difficulty.
+
+This data comes from the classic (non-draft) FPL API, fetched best-effort: if it's briefly unreachable on an update run, the tab just keeps showing whatever was cached last time rather than breaking the rest of the update.
+
 ## Feedback
 
 The **Feedback** button in the header (and the **Feedback** tab) opens a new GitHub issue on this repository, labeled `feedback`, with the tab you were viewing pre-filled in the title and body. The Feedback tab also has its own box to type feedback directly — it opens the same pre-filled issue, just with your text in the body instead. You'll need a GitHub account to actually post it, since the site itself has nowhere to store submissions (no server, no database).
@@ -89,7 +95,7 @@ Draft leagues get a new ID each season. Change `league_id` in `config.json` and 
 
 ## Limits
 
-- The FPL Draft API is unofficial and can change without notice. Raw downloads are kept in `data/raw/` so nothing is lost if it does.
+- The FPL Draft API is unofficial and can change without notice. Raw downloads are kept in `data/raw/` so nothing is lost if it does. The Fixtures tab also depends on the classic (non-draft) FPL API for real-world fixtures and team strength — same caveat, and it's fetched best-effort so a hiccup there won't break the rest of an update.
 - Trades between managers are not included yet.
 - Demo data is in `docs/data.js` until you run the first update. Regenerate it with `python3 tests/make_demo.py`.
 

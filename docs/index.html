@@ -15,6 +15,7 @@
   --h0: #cde2fb; --h1: #9ec5f4; --h2: #6da7ec; --h3: #2a78d6; --h4: #184f95;
   --h-ink-light: #0b0b0b; --h-ink-dark: #ffffff;
   --rs-lo: #e2a39d; --rs-hi: #9cc9a6;
+  --fdr-1: #1f7a4d; --fdr-2: #3dd68c; --fdr-3: #d8d8d3; --fdr-4: #ef5c7a; --fdr-5: #8a1538;
 }
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme="light"])) {
@@ -123,6 +124,9 @@ details .tbl-wrap { margin-top: 8px; }
 .heat td, .heat th { padding: 4px; text-align: center; }
 .heat td.l, .heat th.l { text-align: left; padding-left: 0; }
 .heat .cell { min-width: 26px; height: 28px; line-height: 28px; border-radius: 6px; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.fdr .cell { min-width: 64px; height: auto; line-height: 1.3; padding: 5px 4px; font-weight: 650; }
+.fdr .cell .gw { display: block; font-size: 10.5px; font-weight: 500; opacity: .75; }
+.fdr .fav { margin-right: 2px; }
 .plist { list-style: none; margin: 8px 0 0; padding: 0; }
 .plist li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--grid); font-size: 13.5px; }
 .plist li:last-child { border-bottom: 0; }
@@ -447,7 +451,7 @@ if (!D.checks.all_ok) app.append(h("div", { class: "banner" }, h("strong", {}, "
   "some calculated scores do not match the site's own standings. See “Data checks” at the bottom."));
 
 /* tabs */
-const TABS = [["overview", "Overview"], ["rounds", "Rounds"], ["transactions", "Transactions"], ["players", "Players"], ["allplayers", "All players"], ["feedback", "Feedback"]];
+const TABS = [["overview", "Overview"], ["rounds", "Rounds"], ["transactions", "Transactions"], ["players", "Players"], ["allplayers", "All players"], ["fixtures", "Fixtures"], ["feedback", "Feedback"]];
 const anchor = h("div");
 const tabbar = h("div", { class: "tabs", role: "tablist", "aria-label": "Dashboard sections" });
 const panels = {}, tabBtns = {};
@@ -824,6 +828,43 @@ pg = panels.allplayers;
       everyoneToggle, "Show every player, including ones never owned this season"),
     countNote,
     h("div", { class: "tbl-wrap" }, h("table", {}, thead, body))));
+}
+
+/* fixtures */
+pg = panels.fixtures;
+pg.append(section("Fixtures"));
+{
+  const FT = D.fixtures_by_team || [];
+  if (!FT.length) {
+    pg.append(emptyMsg("Fixture data isn't available yet."));
+  } else {
+    const fdrColor = d => `var(--fdr-${d})`;
+    const fdrInk = d => (d === 2 || d === 3) ? "var(--h-ink-light)" : "var(--h-ink-dark)";
+    const maxCols = Math.max(1, ...FT.map(t => t.fixtures.length));
+    const head = ["Team", ...Array.from({ length: maxCols }, (_, i) => `Fixture ${i + 1}`)];
+    const cell = f => {
+      if (!f) return h("td", {}, h("div", { class: "cell" }, "–"));
+      const bg = f.difficulty ? fdrColor(f.difficulty) : "var(--wash)";
+      const ink = f.difficulty ? fdrInk(f.difficulty) : "var(--ink-2)";
+      const title = `GW${f.gw ?? "?"}: ${f.home ? "Home" : "Away"} vs ${f.opponent}`
+        + (f.difficulty ? `, difficulty ${f.difficulty}/5` : "")
+        + (f.favourite === true ? " — favourite" : f.favourite === false ? " — underdog" : "");
+      return h("td", {}, h("div", { class: "cell", style: `background:${bg};color:${ink}`, title },
+        h("span", { class: "gw" }, f.gw != null ? `GW${f.gw}` : ""),
+        f.favourite === true ? h("span", { class: "fav" }, "★") : null,
+        `${f.opponent} (${f.home ? "H" : "A"})`));
+    };
+    const rows = FT.map(t => h("tr", {}, h("td", { class: "l" }, t.name, h("span", { class: "pos" }, t.short_name)),
+      Array.from({ length: maxCols }, (_, i) => cell(t.fixtures[i]))));
+    const legendSwatch = (d, label) => h("li", {},
+      h("span", { style: `display:inline-block;min-width:20px;height:20px;line-height:20px;text-align:center;border-radius:5px;font-weight:650;font-size:11px;background:${fdrColor(d)};color:${fdrInk(d)}` }, d),
+      label);
+    pg.append(card("Next fixtures", "Each team's next five Premier League fixtures, coloured by that team's own difficulty rating (1 = easiest, 5 = hardest). ★ marks a fixture where this team is the stronger side, comparing both teams' home/away strength ratings.",
+      h("ul", { class: "legend" }, [1, 2, 3, 4, 5].map(d => legendSwatch(d, d === 1 ? "Easy" : d === 5 ? "Hard" : ""))),
+      h("div", { class: "tbl-wrap" }, h("table", { class: "fdr heat" },
+        h("thead", {}, h("tr", {}, head.map((x, i) => h("th", { class: i ? "" : "l" }, x)))),
+        h("tbody", {}, rows)))));
+  }
 }
 
 /* feedback */
