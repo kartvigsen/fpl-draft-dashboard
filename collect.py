@@ -17,6 +17,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 BASE = "https://draft.premierleague.com/api"
+# Real-world PL fixtures, results and team strength live on the classic
+# (non-draft) FPL site, not the draft API above.
+CLASSIC_BASE = "https://fantasy.premierleague.com/api"
 ROOT = Path(__file__).resolve().parent
 RAW = ROOT / "data" / "raw"
 UA = "Mozilla/5.0 (compatible; fpl-draft-friends-dashboard/1.0)"
@@ -27,8 +30,8 @@ class FetchError(Exception):
     pass
 
 
-def get_json(path, retries=3):
-    url = f"{BASE}/{path.lstrip('/')}"
+def get_json(path, retries=3, base=BASE):
+    url = f"{base}/{path.lstrip('/')}"
     last = "unknown error"
     for attempt in range(1, retries + 1):
         try:
@@ -90,6 +93,17 @@ def collect(force=False, log=print):
     save("draft_choices.json", get_json(f"draft/{league_id}/choices"))
     entry_ids = [e["entry_id"] for e in details.get("league_entries", [])]
     log(f"League '{details.get('league', {}).get('name')}' with {len(entry_ids)} managers")
+
+    # 2b. Real-world PL fixtures and team strength, for the Fixtures tab.
+    # Best-effort: if this classic-API host is unreachable this run, the
+    # Fixtures tab just keeps showing whatever was cached last time rather
+    # than breaking the whole update.
+    try:
+        classic_boot = get_json("bootstrap-static/", base=CLASSIC_BASE)
+        save("classic_teams.json", classic_boot.get("teams", []))
+        save("fixtures.json", get_json("fixtures/?future=1", base=CLASSIC_BASE))
+    except FetchError as e:
+        warnings.append(f"Fixtures/team strength: {e}")
 
     # 3. Per-gameweek files: live player points + each manager's lineup.
     # A new season gets a new league_id (see README); an old cache saved

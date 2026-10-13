@@ -39,8 +39,15 @@ class CollectTest(unittest.TestCase):
     def set_league_id(self, league_id):
         (self.project / "config.json").write_text(json.dumps({"league_id": league_id}))
 
-    def fake_get(self, path):
+    def fake_get(self, path, base=None):
         self.calls.append(path)
+        if base == collect.CLASSIC_BASE:
+            if path == "bootstrap-static/": f = "__classic_bootstrap__"
+            elif path == "fixtures/?future=1": f = "fixtures.json"
+            else: raise AssertionError("unexpected classic endpoint " + path)
+            if f == "__classic_bootstrap__":
+                return {"teams": json.loads((self.api / "classic_teams.json").read_text())}
+            return json.loads((self.api / f).read_text())
         parts = path.split("/")
         if path == "game": f = "game.json"
         elif path == "bootstrap-static": f = "bootstrap.json"
@@ -106,6 +113,26 @@ class CollectTest(unittest.TestCase):
         self.assertIn("draft/7281/choices", self.calls)
         cached = json.loads((self.out / "draft_choices.json").read_text())
         self.assertEqual(cached, json.loads((self.api / "draft_choices.json").read_text()))
+
+    def test_classic_teams_and_fixtures_are_fetched_from_the_classic_api(self):
+        collect.collect(log=lambda *_: None)
+        self.assertIn("bootstrap-static/", self.calls)
+        self.assertIn("fixtures/?future=1", self.calls)
+        cached_teams = json.loads((self.out / "classic_teams.json").read_text())
+        self.assertEqual(cached_teams, json.loads((self.api / "classic_teams.json").read_text()))
+        cached_fixtures = json.loads((self.out / "fixtures.json").read_text())
+        self.assertEqual(cached_fixtures, json.loads((self.api / "fixtures.json").read_text()))
+
+    def test_fixtures_fetch_failure_does_not_break_the_rest_of_the_update(self):
+        def flaky_get(path, base=None):
+            if base == collect.CLASSIC_BASE:
+                raise collect.FetchError("classic API is down")
+            return self.fake_get(path, base=base)
+        collect.get_json = flaky_get
+        warnings = collect.collect(log=lambda *_: None)
+        self.assertTrue(any("Fixtures" in w for w in warnings))
+        d = build_stats.build(self.out)
+        self.assertTrue(d["checks"]["all_ok"])
 
     def test_gameweek_becomes_final_once_finished(self):
         collect.collect(log=lambda *_: None)

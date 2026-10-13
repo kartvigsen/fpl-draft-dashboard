@@ -422,5 +422,80 @@ class ScorersByTeamTest(unittest.TestCase):
         self.assertNotIn("top_by_manager", self.d["players"])
 
 
+# Four real Premier League teams (distinct from the fantasy ones above), to
+# check the "next 5 fixtures" / "favourite" logic in isolation.
+# SFC is strong everywhere, WFC is weak everywhere, MFC and EFC are
+# identically mid-strength (an exact tie, on purpose).
+CLASSIC_TEAMS = [
+    {"id": 1, "name": "Strong FC", "short_name": "SFC", "strength_overall_home": 5, "strength_overall_away": 4},
+    {"id": 2, "name": "Weak FC", "short_name": "WFC", "strength_overall_home": 2, "strength_overall_away": 1},
+    {"id": 3, "name": "Mid FC", "short_name": "MFC", "strength_overall_home": 3, "strength_overall_away": 3},
+    {"id": 4, "name": "Even FC", "short_name": "EFC", "strength_overall_home": 3, "strength_overall_away": 3},
+]
+
+
+def _fixture(event, team_h, team_a, kickoff, h_diff=3, a_diff=3):
+    return {"event": event, "team_h": team_h, "team_a": team_a, "kickoff_time": kickoff,
+            "team_h_difficulty": h_diff, "team_a_difficulty": a_diff, "finished": False}
+
+
+class FixturesTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        fixtures = [
+            _fixture(7, 1, 2, "2026-10-17T11:30:00Z", h_diff=1, a_diff=5),   # SFC(H) vs WFC(A)
+            _fixture(8, 2, 1, "2026-10-24T11:30:00Z", h_diff=5, a_diff=1),   # WFC(H) vs SFC(A)
+            _fixture(9, 3, 1, "2026-10-31T11:30:00Z"),                      # MFC(H) vs SFC(A)
+            _fixture(7, 3, 4, "2026-10-17T14:00:00Z"),                      # MFC(H) vs EFC(A) -- a tie
+            # SFC's 3rd-6th fixtures, to check the next-5 cap and ordering.
+            _fixture(10, 1, 2, "2026-11-07T11:30:00Z"),
+            _fixture(11, 1, 2, "2026-11-14T11:30:00Z"),
+            _fixture(12, 1, 2, "2026-11-21T11:30:00Z"),
+            _fixture(13, 1, 2, "2026-11-28T11:30:00Z"),
+        ]
+        mock.write_raw(self.tmp, SCORES, classic_teams=CLASSIC_TEAMS, fixtures=fixtures)
+        self.d = build_stats.build(self.tmp)
+        self.by_short = {t["short_name"]: t for t in self.d["fixtures_by_team"]}
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_every_classic_team_gets_an_entry(self):
+        self.assertEqual(set(self.by_short), {"SFC", "WFC", "MFC", "EFC"})
+
+    def test_strong_team_is_favourite_home_and_away(self):
+        sfc = self.by_short["SFC"]["fixtures"]
+        gw7 = next(f for f in sfc if f["gw"] == 7)  # SFC home vs WFC away: 5 > 1
+        self.assertTrue(gw7["favourite"])
+        self.assertTrue(gw7["home"])
+        self.assertEqual(gw7["opponent"], "WFC")
+        gw8 = next(f for f in sfc if f["gw"] == 8)  # SFC away vs WFC home: 4 > 2
+        self.assertTrue(gw8["favourite"])
+        self.assertFalse(gw8["home"])
+
+    def test_weak_team_is_never_favourite_against_the_strong_team(self):
+        wfc = self.by_short["WFC"]["fixtures"]
+        gw7 = next(f for f in wfc if f["gw"] == 7)  # WFC away vs SFC home: 1 < 5
+        self.assertFalse(gw7["favourite"])
+        gw8 = next(f for f in wfc if f["gw"] == 8)  # WFC home vs SFC away: 2 < 4
+        self.assertFalse(gw8["favourite"])
+
+    def test_equal_strength_is_no_favourite_for_either_side(self):
+        mfc = self.by_short["MFC"]["fixtures"]
+        efc = self.by_short["EFC"]["fixtures"]
+        self.assertIsNone(next(f for f in mfc if f["opponent"] == "EFC")["favourite"])
+        self.assertIsNone(next(f for f in efc if f["opponent"] == "MFC")["favourite"])
+
+    def test_own_difficulty_rating_is_exposed_separately_from_favourite(self):
+        sfc = self.by_short["SFC"]["fixtures"]
+        gw7 = next(f for f in sfc if f["gw"] == 7)
+        self.assertEqual(gw7["difficulty"], 1)  # SFC's own (easy) rating for that fixture
+
+    def test_only_the_next_5_fixtures_are_kept_in_order(self):
+        sfc = self.by_short["SFC"]["fixtures"]
+        self.assertEqual(len(sfc), 5)
+        self.assertEqual([f["gw"] for f in sfc], [7, 8, 9, 10, 11])
+
+
 if __name__ == "__main__":
     unittest.main()
