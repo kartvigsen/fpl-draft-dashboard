@@ -192,6 +192,20 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(self.d["players"]["bench"][self.m["Dan"]]["total"], 8)
         self.assertEqual(self.d["players"]["bench"][self.m["Alex"]]["total"], 0)
 
+    def test_live_round_folds_into_scorer_table_starts_and_points(self):
+        # Alex's primary scorer (element 1) started every gameweek including
+        # the live GW5 -- the live score folds into both starts and points,
+        # same as the Standings total.
+        rows = {r["id"]: r for r in self.d["players"]["scorers_by_manager"][self.m["Alex"]]}
+        self.assertEqual(rows[1]["starts"], 5)
+        self.assertEqual(rows[1]["live_points"], 20)
+        self.assertEqual(rows[1]["points"], 232 + 20)
+
+    def test_best_rounds_leaderboard_stays_finished_only(self):
+        # best_rounds is a record, so -- unlike starts/points above -- it
+        # must not include an entry from the live GW5.
+        self.assertTrue(all(r["gw"] != 5 for r in self.d["players"]["best_rounds"]))
+
     def test_biggest_bench_misses(self):
         missed = self.d["players"]["missed"]
         # 14 pts for Bo in GW2 is the biggest; Dan's four 2-pt benchings follow.
@@ -226,6 +240,26 @@ class BuildTest(unittest.TestCase):
             mock.write_raw(d2, SCORES, standings_ok=False)
             out = build_stats.build(d2)
             self.assertFalse(out["checks"]["all_ok"])
+        finally:
+            shutil.rmtree(d2, ignore_errors=True)
+
+    def test_scorer_rows_flag_whether_the_player_is_still_on_the_squad(self):
+        d2 = tempfile.mkdtemp()
+        try:
+            # One finished gameweek, two managers; a GW1 substitution gives
+            # manager 0 (Alex, element 1 is their main scorer) a second
+            # scorer, element 12 -- still owned per element_status, element
+            # 12 has since been dropped (a free agent now).
+            mock.write_raw(d2, [[50, 40]], current_finished=True,
+                           subs={(1, 0): (2, 12)},
+                           element_status=[
+                               {"element": 1, "owner": 101, "status": "o"},
+                               {"element": 12, "owner": None, "status": "a"},
+                           ])
+            out = build_stats.build(d2)
+            rows = {r["id"]: r for r in out["players"]["scorers_by_manager"]["101"]}
+            self.assertTrue(rows[1]["on_squad"])
+            self.assertFalse(rows[12]["on_squad"])
         finally:
             shutil.rmtree(d2, ignore_errors=True)
 

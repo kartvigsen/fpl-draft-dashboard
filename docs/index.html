@@ -691,29 +691,31 @@ if (gws.length) {
   function scorerTable(all) {
     const sorter = makeSortHeader(SCORER_COLS, "points", -1);
     const thead = h("thead", {});
-    const headBody = h("tbody", {}), restBody = h("tbody", {});
-    const summary = h("summary", {});
-    const details = h("details", {}, summary, h("div", { class: "tbl-wrap" }, h("table", {}, restBody)));
+    const body = h("tbody", {});
+    let showAll = false;
+    const more = h("button", { class: "ghost", type: "button", style: "margin-top:10px",
+      onclick: () => { showAll = !showAll; render(); } });
     const row = p => h("tr", {},
-      h("td", { class: "l" }, p.name, h("span", { class: "pos" }, p.pos), h("span", { class: "meta" }, ` ${p.team}`)),
-      h("td", { class: "num" }, p.starts), h("td", { class: "num" }, p.points),
+      h("td", { class: "l" }, h("span", { class: p.on_squad ? "up" : "" }, p.name),
+        h("span", { class: "pos" }, p.pos), h("span", { class: "meta" }, ` ${p.team}`)),
+      h("td", { class: "num" }, p.starts),
+      h("td", { class: "num" }, p.points,
+        p.live_points != null ? h("span", { style: "color:var(--ink-2);font-weight:400;font-size:12px;margin-left:6px" }, `(+${p.live_points} live)`) : null),
       h("td", { class: "num" }, (p.points / p.starts).toFixed(1)));
     function render() {
       const sorted = sorter.sorted(all);
-      const head = sorted.slice(0, 5), rest = sorted.slice(5);
-      headBody.textContent = ""; headBody.append(...head.map(row));
-      restBody.textContent = ""; restBody.append(...rest.map(row));
-      details.hidden = rest.length === 0;
-      summary.textContent = `Show ${rest.length} more player${rest.length === 1 ? "" : "s"}`;
+      body.textContent = ""; body.append(...(showAll ? sorted : sorted.slice(0, 5)).map(row));
+      more.hidden = sorted.length <= 5;
+      more.textContent = showAll ? "Show fewer" : `Show ${sorted.length - 5} more player${sorted.length - 5 === 1 ? "" : "s"}`;
       thead.textContent = ""; thead.append(sorter.row(render));
     }
     render();
-    return h("div", {}, h("div", { class: "tbl-wrap" }, h("table", {}, thead, headBody)), details);
+    return h("div", {}, h("div", { class: "tbl-wrap" }, h("table", {}, thead, body)), more);
   }
   pg.append(section("Scorers by team"));
   pg.append(h("div", { class: "grid-2col" }, ranked.map(m => {
     const all = P.scorers_by_manager[m.entry_id] || [];
-    return card(nameOf(m), "All players who scored while in the starting XI. Click a column to sort.",
+    return card(nameOf(m), "All players who scored while in the starting XI, including the live gameweek. Click a column to sort. A green name is still on the squad (including the bench).",
       all.length ? scorerTable(all) : emptyMsg("No players have scored yet."));
   })));
   const benchRows = ranked.map(m => ({ m, value: P.bench[m.entry_id].total,

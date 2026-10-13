@@ -84,6 +84,23 @@ class FrontendMarkupTest(unittest.TestCase):
     def test_players_tab_uses_a_2column_grid(self):
         self.assertIn("grid-2col", HTML)
 
+    def test_scorer_table_is_a_single_table_so_expanded_rows_stay_aligned(self):
+        # Splitting the visible/expanded rows into two separate <table>
+        # elements let each size its columns independently, so the "show
+        # more" rows didn't line up with the header above. One table/tbody,
+        # with extra rows just not rendered until "Show more" is clicked,
+        # keeps every row's columns aligned with the shared header.
+        section = HTML[HTML.index("function scorerTable("):HTML.index("pg.append(section(\"Scorers by team\"))")]
+        self.assertNotIn("headBody", section)
+        self.assertNotIn("restBody", section)
+        self.assertIn("h(\"table\", {}, thead, body)", section)
+        self.assertIn("showAll ? sorted : sorted.slice(0, 5)", section)
+
+    def test_scorer_table_shows_live_points_and_still_on_squad(self):
+        self.assertIn("p.live_points != null", HTML)
+        self.assertIn('class: p.on_squad ? "up" : ""', HTML)
+        self.assertIn("still on the squad", HTML)
+
     def test_scorer_table_is_sortable_by_name_starts_points_and_avg(self):
         self.assertIn('key: "name"', HTML)
         self.assertIn('key: "starts"', HTML)
