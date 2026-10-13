@@ -27,6 +27,25 @@ class FrontendMarkupTest(unittest.TestCase):
     def test_all_moves_result_is_colour_coded(self):
         self.assertIn('h("span", { class: ok ? "up" : "down" }, ok ? "Accepted" : "Denied")', HTML)
 
+    def test_standings_total_includes_the_live_round(self):
+        self.assertIn("p.live_points != null", HTML)
+        self.assertIn("live)`", HTML)
+
+    def test_standings_explains_the_live_score_when_a_round_is_in_progress(self):
+        self.assertIn("if (D.live_round) pg.append(", HTML)
+        self.assertIn("isn't final yet", HTML)
+
+    def test_header_subtitle_reflects_live_not_excluded(self):
+        self.assertIn("in progress (live, not yet final)", HTML)
+        self.assertNotIn("in progress (not counted)", HTML)
+
+    def test_leader_tile_flags_a_live_total(self):
+        self.assertIn('(D.live_round ? " (live)" : "")', HTML)
+
+    def test_footer_rule_text_reflects_live_standings(self):
+        self.assertIn("Standings and total points update live while a gameweek is in progress", HTML)
+        self.assertNotIn("Only finished gameweeks count.", HTML)
+
     def test_scrollable_tables_show_an_edge_shadow(self):
         # Wide tables (heatmap, all moves, all players, ...) overflow on
         # narrow screens; a scroll-shadow hints there's more off-screen

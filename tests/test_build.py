@@ -129,9 +129,23 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(self.d["live_round"]["gw"], 5)
 
     def test_totals_and_ranks(self):
+        # GW1-4 finished (241/243/175/212) plus GW5's live score
+        # (20/33/10/15) -- the running total and standings order update
+        # while a round is still in progress.
         self.assertEqual([self.pm(n)["total"] for n in ("Alex", "Bo", "Cleo", "Dan")],
-                         [241, 243, 175, 212])
+                         [261, 276, 185, 227])
         self.assertEqual([self.pm(n)["rank"] for n in ("Alex", "Bo", "Cleo", "Dan")], [2, 1, 4, 3])
+
+    def test_live_round_points_are_exposed_separately_from_total(self):
+        self.assertEqual([self.pm(n)["live_points"] for n in ("Alex", "Bo", "Cleo", "Dan")],
+                         [20, 33, 10, 15])
+
+    def test_live_round_does_not_affect_finished_only_records(self):
+        # Rounds won, best/worst round and the GW count stay finished-only;
+        # only the running total/standings pick up the live score.
+        self.assertEqual([self.pm(n)["rounds_played"] for n in ("Alex", "Bo", "Cleo", "Dan")],
+                         [4, 4, 4, 4])
+        self.assertEqual([self.pm(n)["wins"] for n in ("Alex", "Bo", "Cleo", "Dan")], [2, 3, 0, 0])
 
     def test_rounds_won_with_tie_shared(self):
         self.assertEqual([self.pm(n)["wins"] for n in ("Alex", "Bo", "Cleo", "Dan")], [2, 3, 0, 0])
@@ -222,6 +236,9 @@ class BuildTest(unittest.TestCase):
             out = build_stats.build(d2)
             self.assertEqual(out["trends"]["gws"], [1, 2, 3, 4, 5])
             self.assertIsNone(out["live_round"])
+            # No live round once GW5 is finished -- it's already folded into
+            # the finished total like any other round, not tracked separately.
+            self.assertTrue(all(pm["live_points"] is None for pm in out["per_manager"].values()))
         finally:
             shutil.rmtree(d2, ignore_errors=True)
 

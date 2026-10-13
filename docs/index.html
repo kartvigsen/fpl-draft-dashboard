@@ -429,7 +429,7 @@ app.append(h("header", { class: "top" },
   h("div", {},
     h("h1", {}, meta.league_name),
     h("p", { class: "sub" }, lastFin ? `After gameweek ${lastFin}` : "No gameweek finished yet",
-      meta.current_gw && !meta.current_gw_finished ? ` · gameweek ${meta.current_gw} in progress (not counted)` : "",
+      meta.current_gw && !meta.current_gw_finished ? ` · gameweek ${meta.current_gw} in progress (live, not yet final)` : "",
       genText ? ` · updated ${genText}` : "")),
   h("div", { class: "hdr-actions" },
     h("button", { class: "ghost", type: "button", onclick: openFeedbackIssue }, "Feedback"),
@@ -490,8 +490,9 @@ if (gws.length) {
   const leader = ranked[0], second = ranked[1];
   const tied = ranked.filter(m => PM[m.entry_id].total === PM[leader.entry_id].total);
   tiles.append(tile("Leader", tied.length > 1 ? names(tied) : nameOf(leader),
-    tied.length > 1 ? `Level on ${fmt(PM[leader.entry_id].total)} pts` :
-      `${fmt(PM[leader.entry_id].total)} pts, ${fmt(PM[leader.entry_id].total - PM[second.entry_id].total)} ahead`, { small: true }));
+    (tied.length > 1 ? `Level on ${fmt(PM[leader.entry_id].total)} pts` :
+      `${fmt(PM[leader.entry_id].total)} pts, ${fmt(PM[leader.entry_id].total - PM[second.entry_id].total)} ahead`)
+      + (D.live_round ? " (live)" : ""), { small: true }));
   const maxWins = Math.max(...M.map(m => PM[m.entry_id].wins));
   const winners = M.filter(m => PM[m.entry_id].wins === maxWins);
   tiles.append(tile("Most rounds won", `${maxWins}`, names(winners) + (maxWins ? ` (of ${gws.length})` : ""), { tab: "rounds" }));
@@ -509,13 +510,17 @@ pg.append(tiles);
 
 /* standings */
 pg.append(section("Standings"));
+if (D.live_round) pg.append(h("p", { class: "sub" },
+  `Pts includes GW${D.live_round.gw}'s live score, which isn't final yet. Rounds won and records only count once a gameweek finishes.`));
 {
   const head = ["Team", "Pts", "Avg", "Rounds won", "Best", "Worst", "Moves", "Bench pts"];
   const body = ranked.map(m => {
     const p = PM[m.entry_id];
     return h("tr", {},
       h("td", {}, h("span", { class: "who" }, h("span", { class: "rk" }, p.rank), dot(m), h("span", {}, nameOf(m), h("small", {}, m.manager)))),
-      h("td", { class: "num win" }, fmt(p.total)), h("td", { class: "num" }, p.average ?? "–"),
+      h("td", { class: "num win" }, fmt(p.total),
+        p.live_points != null ? h("span", { style: "color:var(--ink-2);font-weight:400;font-size:12px;margin-left:6px" }, `(+${p.live_points} live)`) : null),
+      h("td", { class: "num" }, p.average ?? "–"),
       h("td", { class: "num" }, p.wins),
       h("td", { class: "num" }, p.best ? `${p.best.points} (GW${p.best.gw})` : "–"),
       h("td", { class: "num" }, p.worst ? `${p.worst.points} (GW${p.worst.gw})` : "–"),
@@ -860,7 +865,7 @@ pg.append(h("p", { class: "sub" }, "Feedback already filed on this project, newe
 /* footer + checks */
 const chk = D.checks;
 const foot = h("div", { class: "foot" },
-  h("p", {}, "How the numbers work: a round score is the total of a manager's starting XI after automatic substitutions. Only finished gameweeks count. Ties for the top score count as a win for every tied manager. Transactions count accepted moves only."),
+  h("p", {}, "How the numbers work: a round score is the total of a manager's starting XI after automatic substitutions. Standings and total points update live while a gameweek is in progress; rounds won and records only count once it finishes. Ties for the top score count as a win for every tied manager. Transactions count accepted moves only."),
   h("p", {}, "Data comes from the public FPL Draft API, which is unofficial and can change without notice."));
 const dl = h("details", {}, h("summary", {}, chk.all_ok ? "Data checks: all passed" : "Data checks: please review"));
 const chkRows = chk.standings.map(c => h("tr", {}, h("td", { class: "l" }, nameOf(byId[c.entry_id])),
