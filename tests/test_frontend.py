@@ -106,21 +106,23 @@ class FrontendMarkupTest(unittest.TestCase):
     def test_squad_pill_reuses_the_free_agent_pill_styling(self):
         self.assertIn(".tag-free, .tag-squad {", HTML)
 
-    def test_points_bracket_pivot_lives_on_all_players_above_the_main_table(self):
-        self.assertIn("Squad by points bracket", HTML)
+    def test_rank_bracket_pivot_lives_on_all_players_above_the_main_table(self):
+        # Brackets are by overall rank in the full player pool (1st-10th
+        # highest scorer, 11th-20th, ...), not by points value -- a
+        # "1-10" bucket is the 10 highest scorers across all players, so
+        # ranking by points descending and slicing is the right approach,
+        # not filtering by a total_points range.
+        self.assertIn("Squad by overall rank bracket", HTML)
         self.assertIn('"1–10"', HTML)
-        self.assertIn('"201–667"', HTML)
-        # Moved off the Players tab entirely -- it reads All players' AP/
-        # ranked data and sits above that tab's big sortable table, so a
-        # "1-10" bracket can be visually cross-checked against real rows
-        # instead of being misread as a top-10 ranking.
+        self.assertIn("byRank.slice(lo - 1, hi)", HTML)
+        self.assertIn("[...AP].sort((a, b) => b.total_points - a.total_points)", HTML)
         section_order = HTML.index('pg.append(section("All players"));')
-        pivot_idx = HTML.index("Squad by points bracket")
+        pivot_idx = HTML.index("Squad by overall rank bracket")
         table_idx = HTML.index('pg.append(card("Every Premier League player"')
         self.assertTrue(section_order < pivot_idx < table_idx)
-        self.assertIn("not a top-10 ranking", HTML)
+        self.assertIn("not players who scored 1 to 10 points", HTML)
         players_section = HTML[HTML.index('pg = panels.players;'):HTML.index('/* all players */')]
-        self.assertNotIn("Squad by points bracket", players_section)
+        self.assertNotIn("Squad by overall rank bracket", players_section)
 
     def test_scorer_table_is_sortable_by_name_starts_points_and_avg(self):
         self.assertIn('key: "name"', HTML)

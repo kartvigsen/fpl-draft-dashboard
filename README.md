@@ -65,7 +65,7 @@ One table per team of every player who scored a positive total while in that man
 
 ## All players tab
 
-**Squad by points bracket** is a pivot table above the main list: how many players on each manager's current squad (15 players, including the bench) fall into each season total-points bracket (0, 1–10, 11–20, ... up to 201+). Darker cells mean more players. A bracket like "1–10" is the number of points a player scored this season, not a ranking — sort the table below by Total points to see exactly who's in which bracket.
+**Squad by overall rank bracket** is a pivot table above the main list: how many players on each manager's current squad (15 players, including the bench) rank in each bracket of the *entire* Premier League player pool, sorted by season total points (1st–10th highest scorer, 11th–20th, ... down to the bottom of the list). Darker cells mean more players. A bracket like "1–10" is the 10 highest scorers across all players, not players who scored 1 to 10 points — sort the table below by Total points to see the full ranking and check who's in which bracket.
 
 Every Premier League player, not just the ones on a roster in this league — filter by owner (including "Free agent"), position or club, or search by name, and click a column header to sort (click again to reverse). Columns:
 
