@@ -231,6 +231,13 @@ def build(raw=RAW, now=None):
         for e, r in _rank_desc(running).items():
             rank_by_gw[e].append(r)
 
+    # The gameweek in progress has a live, not-yet-final score per manager
+    # (same figure shown on the Rounds tab's "live" heatmap row). It counts
+    # towards the running total and standings order below, so the board
+    # updates as the round plays out -- but NOT towards "rounds won" or any
+    # other record, which stay finished-gameweeks-only (see module docstring).
+    live_scores = {e: scores[cur].get(e) for e in eids} if (cur and not cur_done) else {}
+
     per_manager = {}
     for e in eids:
         gs = [(gw, scores[gw][e]) for gw in complete]
@@ -241,9 +248,11 @@ def build(raw=RAW, now=None):
         worst = min(gs, key=lambda x: (x[1], x[0])) if gs else None
         mine = [t for t in tx_list if t["entry_id"] == e]
         acc = [t for t in mine if t["result"] == "a"]
+        live_pts = live_scores.get(e)
         per_manager[str(e)] = {
             "rounds_played": len(pts),
-            "total": sum(pts),
+            "total": sum(pts) + (live_pts or 0),
+            "live_points": live_pts,
             "average": round(sum(pts) / len(pts), 1) if pts else None,
             "stdev": round(statistics.pstdev(pts), 1) if len(pts) > 1 else None,
             "wins": wins,

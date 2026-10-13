@@ -18,7 +18,7 @@ Then open `docs/index.html` in a browser. That is the whole routine.
 
 The dashboard has six tabs: Overview, Rounds, Transactions, Players, All players and Feedback. You can link straight to one, for example `index.html#rounds`.
 
-- Run it once the gameweek is finished. A gameweek still in progress is shown as "live" and is not counted in records or rounds won.
+- Run it any time, including while a gameweek is still in progress — standings and each manager's total points update live. Records and "rounds won" still only count once a gameweek finishes, since bonus points and other adjustments aren't final until then.
 - Finished gameweeks are cached in `data/raw/`, so later runs only download the newest gameweek.
 - `python3 update.py --no-fetch` rebuilds from what is already downloaded. `--force` re-downloads everything.
 
@@ -44,7 +44,8 @@ If you use the included `.github/workflows/update.yml`, the dashboard rebuilds i
 
 ## Rules used
 
-- **Rounds won:** the top score among all managers in a gameweek. A tie counts as a win for each tied manager.
+- **Standings and total points:** update live while a gameweek is in progress, using that round's provisional score. The Standings table marks a live contribution with a small "(+N live)" next to a manager's points, and a note explains it while a round is in progress.
+- **Rounds won:** the top score among all managers in a gameweek. A tie counts as a win for each tied manager. Only finished gameweeks are eligible — a live round can't be "won" until bonus points and the rest are final.
 - **Transactions:** accepted moves only. Denied bids are shown separately.
 - **Highest and lowest round:** finished gameweeks only.
 
