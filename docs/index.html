@@ -130,7 +130,7 @@ details .tbl-wrap { margin-top: 8px; }
 .pos { display: inline-block; font-size: 11px; color: var(--ink-2); border: 1px solid var(--border); border-radius: 5px; padding: 0 5px; margin-left: 6px; }
 .up { color: var(--good); font-weight: 650; }
 .down { color: var(--bad); font-weight: 650; }
-.tag-free {
+.tag-free, .tag-squad {
   display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 650;
   background: color-mix(in oklab, var(--good) 18%, var(--surface)); color: var(--good);
 }
@@ -346,6 +346,12 @@ function lineChart(host, cfg) {
 }
 
 /* ---------- reusable bits ---------- */
+function heatCell(v, maxCell, title) {
+  const s = v === 0 ? -1 : Math.min(4, Math.ceil((v / maxCell) * 5) - 1);
+  const dark = s >= 3;
+  return h("td", {}, h("div", { class: "cell", title,
+    style: s < 0 ? "color:var(--muted)" : `background:var(--h${Math.max(0, s)});color:${dark ? "var(--h-ink-dark)" : "var(--h-ink-light)"}` }, v || "·"));
+}
 function legend(list) {
   return h("ul", { class: "legend" }, list.map(m => h("li", {}, h("span", { class: "key", style: `background:${col(m)}` }), nameOf(m))));
 }
@@ -607,14 +613,8 @@ pg = panels.transactions;
     note: `${PM[m.entry_id].tx_free_agent} free agent · ${PM[m.entry_id].tx_waiver} waiver · ${PM[m.entry_id].tx_denied} denied` }));
   const allG = D.rounds.map(r => r.gw);
   const maxCell = Math.max(1, ...M.flatMap(m => allG.map(g => T.matrix[m.entry_id][g] || 0)));
-  const step = v => v === 0 ? -1 : Math.min(4, Math.ceil((v / maxCell) * 5) - 1);
   const heatRows = ranked.map(m => h("tr", {}, h("td", { class: "l" }, h("span", { class: "who" }, dot(m), nameOf(m))),
-    allG.map(g => {
-      const v = T.matrix[m.entry_id][g] || 0, s = step(v);
-      const dark = s >= 3;
-      return h("td", {}, h("div", { class: "cell", title: `${nameOf(m)}, GW${g}: ${v} accepted`,
-        style: s < 0 ? "color:var(--muted)" : `background:var(--h${Math.max(0, s)});color:${dark ? "var(--h-ink-dark)" : "var(--h-ink-light)"}` }, v || "·"));
-    })));
+    allG.map(g => heatCell(T.matrix[m.entry_id][g] || 0, maxCell, `${nameOf(m)}, GW${g}: ${T.matrix[m.entry_id][g] || 0} accepted`))));
   const moves = T.moves;
   pg.append(card("Accepted transactions", "Free-agent pickups and waiver wins that went through. Denied bids are listed under each team.", barList(rows, "moves")));
   pg.append(card("Moves per gameweek", "Accepted moves by round. Darker means more.",
@@ -696,7 +696,8 @@ if (gws.length) {
     const more = h("button", { class: "ghost", type: "button", style: "margin-top:10px",
       onclick: () => { showAll = !showAll; render(); } });
     const row = p => h("tr", {},
-      h("td", { class: "l" }, h("span", { class: p.on_squad ? "up" : "" }, p.name),
+      h("td", { class: "l" }, p.name,
+        p.on_squad ? h("span", { class: "tag-squad", style: "margin-left:6px" }, "Squad") : null,
         h("span", { class: "pos" }, p.pos), h("span", { class: "meta" }, ` ${p.team}`)),
       h("td", { class: "num" }, p.starts),
       h("td", { class: "num" }, p.points,
@@ -713,9 +714,27 @@ if (gws.length) {
     return h("div", {}, h("div", { class: "tbl-wrap" }, h("table", {}, thead, body)), more);
   }
   pg.append(section("Scorers by team"));
+  {
+    const POINT_BRACKETS = [
+      [-Infinity, 0, "0"], [1, 10, "1–10"], [11, 20, "11–20"], [21, 30, "21–30"],
+      [31, 40, "31–40"], [41, 50, "41–50"], [51, 75, "51–75"], [76, 100, "76–100"],
+      [101, 200, "101–200"], [201, Infinity, "201–667"],
+    ];
+    const AP = D.all_players || [];
+    const counts = ranked.map(m => POINT_BRACKETS.map(([lo, hi]) =>
+      AP.filter(p => p.owner_entry_id === m.entry_id && p.total_points >= lo && p.total_points <= hi).length));
+    const maxCell = Math.max(1, ...counts.flat());
+    const rows = POINT_BRACKETS.map(([, , label], bi) => h("tr", {}, h("td", { class: "l" }, label),
+      ranked.map((m, mi) => heatCell(counts[mi][bi], maxCell,
+        `${nameOf(m)}, ${label} pts: ${counts[mi][bi]} player${counts[mi][bi] === 1 ? "" : "s"}`))));
+    pg.append(card("Squad by points bracket", "How each manager's current squad (including the bench) splits across season total-points brackets. Darker means more players.",
+      h("div", { class: "tbl-wrap" }, h("table", { class: "heat" },
+        h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Points"), ranked.map(m => h("th", {}, nameOf(m))))),
+        h("tbody", {}, rows)))));
+  }
   pg.append(h("div", { class: "grid-2col" }, ranked.map(m => {
     const all = P.scorers_by_manager[m.entry_id] || [];
-    return card(nameOf(m), "All players who scored while in the starting XI, including the live gameweek. Click a column to sort. A green name is still on the squad (including the bench).",
+    return card(nameOf(m), "All players who scored while in the starting XI, including the live gameweek. Click a column to sort. A green “Squad” label means that player is still on the squad (including the bench).",
       all.length ? scorerTable(all) : emptyMsg("No players have scored yet."));
   })));
   const benchRows = ranked.map(m => ({ m, value: P.bench[m.entry_id].total,

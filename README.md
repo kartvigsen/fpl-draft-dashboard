@@ -61,7 +61,9 @@ If you use the included `.github/workflows/update.yml`, the dashboard rebuilds i
 
 ## Players tab
 
-One table per team of every player who scored a positive total while in that manager's starting XI, with columns for starts, points and average points per start — click a column header to sort by it (click again to reverse). Starts and points include the live gameweek while a round is in progress, same as the Standings total. Sorted by points by default; the top 5 show directly and the rest show under "Show N more players". A player who was traded mid-season appears under both teams, with the points they scored for each. A green name means that player is still on the manager's squad, including the bench — not just the ones who started the round they scored in. Teams are laid out two per row.
+**Squad by points bracket** is a pivot table above the per-team tables: how many players on each manager's current squad (15 players, including the bench) fall into each season total-points bracket (0, 1–10, 11–20, ... up to 201+). Darker cells mean more players — useful for seeing who's drafted/traded for strength versus depth.
+
+One table per team of every player who scored a positive total while in that manager's starting XI, with columns for starts, points and average points per start — click a column header to sort by it (click again to reverse). Starts and points include the live gameweek while a round is in progress, same as the Standings total. Sorted by points by default; the top 5 show directly and the rest show under "Show N more players". A player who was traded mid-season appears under both teams, with the points they scored for each. A green "Squad" label next to a name means that player is still on the manager's squad, including the bench — not just the ones who started the round they scored in. Teams are laid out two per row.
 
 ## All players tab
 
