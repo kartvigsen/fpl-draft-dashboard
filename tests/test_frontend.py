@@ -98,8 +98,22 @@ class FrontendMarkupTest(unittest.TestCase):
 
     def test_scorer_table_shows_live_points_and_still_on_squad(self):
         self.assertIn("p.live_points != null", HTML)
-        self.assertIn('class: p.on_squad ? "up" : ""', HTML)
+        self.assertIn('p.on_squad ? h("span", { class: "tag-squad"', HTML)
         self.assertIn("still on the squad", HTML)
+        # The name itself stays plain text; only the pill is coloured.
+        self.assertNotIn('class: p.on_squad ? "up" : ""', HTML)
+
+    def test_squad_pill_reuses_the_free_agent_pill_styling(self):
+        self.assertIn(".tag-free, .tag-squad {", HTML)
+
+    def test_points_bracket_pivot_above_the_individual_scorer_tables(self):
+        self.assertIn("Squad by points bracket", HTML)
+        self.assertIn('"1–10"', HTML)
+        self.assertIn('"201–667"', HTML)
+        section_order = HTML.index('pg.append(section("Scorers by team"));')
+        pivot_idx = HTML.index("Squad by points bracket")
+        grid_idx = HTML.index('pg.append(h("div", { class: "grid-2col" }, ranked.map(m => {')
+        self.assertTrue(section_order < pivot_idx < grid_idx)
 
     def test_scorer_table_is_sortable_by_name_starts_points_and_avg(self):
         self.assertIn('key: "name"', HTML)
@@ -157,7 +171,7 @@ class FrontendMarkupTest(unittest.TestCase):
 
     def test_all_players_free_agent_shown_as_a_green_pill(self):
         self.assertIn('class: "tag-free"', HTML)
-        self.assertIn(".tag-free {", HTML)
+        self.assertIn(".tag-free, .tag-squad {", HTML)
         self.assertIn("border-radius: 999px", HTML)
 
     def test_all_players_columns_are_sortable(self):
