@@ -79,6 +79,8 @@ The table shows the full Premier League player pool by default — untick "Show 
 
 Every Premier League team's next five fixtures (real match fixtures, nothing to do with this draft league), coloured by that team's own FPL difficulty rating (FDR): 1 (easiest, dark green) through 5 (hardest, dark red). A ★ marks a fixture where the team is the stronger side, comparing both teams' home/away strength ratings for that specific match — not just this team's own difficulty colour, which only reflects the opponent's strength from this team's point of view. Hover a fixture for the gameweek, venue and difficulty.
 
+Teams are ranked by **Avg FDR**, the average difficulty of their next fixtures, easiest first — click "Avg FDR" or "Team" to re-sort. Untick one of the five "Fixture" checkboxes to leave that round out of the ranking (and the table); at least one must stay ticked. The dropdown above narrows the table to just the 5 teams with the easiest or hardest run of fixtures.
+
 This data comes from the classic (non-draft) FPL API, fetched best-effort: if it's briefly unreachable on an update run, the tab just keeps showing whatever was cached last time rather than breaking the rest of the update.
 
 ## Feedback

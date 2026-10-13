@@ -841,7 +841,24 @@ pg.append(section("Fixtures"));
     const fdrColor = d => `var(--fdr-${d})`;
     const fdrInk = d => (d === 2 || d === 3) ? "var(--h-ink-light)" : "var(--h-ink-dark)";
     const maxCols = Math.max(1, ...FT.map(t => t.fixtures.length));
-    const head = ["Team", ...Array.from({ length: maxCols }, (_, i) => `Fixture ${i + 1}`)];
+    const included = Array.from({ length: maxCols }, () => true);
+
+    function avgFdr(t) {
+      const vals = [];
+      for (let i = 0; i < maxCols; i++) {
+        if (!included[i]) continue;
+        const f = t.fixtures[i];
+        if (f && f.difficulty != null) vals.push(f.difficulty);
+      }
+      return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    }
+
+    const COLS = [
+      { key: "name", label: "Team", num: false, get: t => t.name },
+      { key: "avg", label: "Avg FDR", num: true, get: t => { const a = avgFdr(t); return a == null ? Infinity : a; } },
+    ];
+    const sorter = makeSortHeader(COLS, "avg", 1);
+
     const cell = f => {
       if (!f) return h("td", {}, h("div", { class: "cell" }, "–"));
       const bg = f.difficulty ? fdrColor(f.difficulty) : "var(--wash)";
@@ -854,16 +871,69 @@ pg.append(section("Fixtures"));
         f.favourite === true ? h("span", { class: "fav" }, "★") : null,
         `${f.opponent} (${f.home ? "H" : "A"})`));
     };
-    const rows = FT.map(t => h("tr", {}, h("td", { class: "l" }, t.name, h("span", { class: "pos" }, t.short_name)),
-      Array.from({ length: maxCols }, (_, i) => cell(t.fixtures[i]))));
+
+    const showSel = h("select", { "aria-label": "Filter teams by schedule difficulty", onchange: () => render() },
+      h("option", { value: "" }, "All teams"),
+      h("option", { value: "easy" }, "5 easiest schedules"),
+      h("option", { value: "hard" }, "5 hardest schedules"));
+
+    const roundToggles = Array.from({ length: maxCols }, (_, i) => {
+      const box = h("input", { type: "checkbox", "aria-label": `Include fixture ${i + 1} in the ranking` });
+      box.checked = true;
+      box.onchange = () => {
+        if (!box.checked && included.filter(Boolean).length <= 1) { box.checked = true; return; }
+        included[i] = box.checked;
+        render();
+      };
+      return h("label", { style: "display:flex;align-items:center;gap:5px;font-size:13px;color:var(--ink-2)" },
+        box, `Fixture ${i + 1}`);
+    });
+
+    function rankedByAvg() {
+      return FT.map(t => ({ t, avg: avgFdr(t) })).filter(x => x.avg != null);
+    }
+    function visibleTeams() {
+      if (showSel.value === "easy") return rankedByAvg().sort((a, b) => a.avg - b.avg).slice(0, 5).map(x => x.t);
+      if (showSel.value === "hard") return rankedByAvg().sort((a, b) => b.avg - a.avg).slice(0, 5).map(x => x.t);
+      return FT;
+    }
+
+    function row(t) {
+      const avg = avgFdr(t);
+      const tr = h("tr", {}, h("td", { class: "l" }, t.name, h("span", { class: "pos" }, t.short_name)),
+        h("td", { class: "num" }, avg == null ? "–" : avg.toFixed(1)));
+      for (let i = 0; i < maxCols; i++) if (included[i]) tr.append(cell(t.fixtures[i]));
+      return tr;
+    }
+
+    const thead = h("thead", {});
+    const body = h("tbody", {});
+    const countNote = h("p", { class: "sub" });
+
+    function render() {
+      const sorted = sorter.sorted(visibleTeams());
+      const includedCount = included.filter(Boolean).length;
+      body.textContent = "";
+      if (!sorted.length) body.append(h("tr", {}, h("td", { class: "l", colspan: String(2 + includedCount) }, emptyMsg("No teams match these filters."))));
+      else body.append(...sorted.map(row));
+      countNote.textContent = `${fmt(sorted.length)} of ${fmt(FT.length)} teams shown, ranked by average fixture difficulty over the ticked rounds.`;
+      thead.textContent = "";
+      const tr = sorter.row(render);
+      for (let i = 0; i < maxCols; i++) if (included[i]) tr.append(h("th", {}, `Fixture ${i + 1}`));
+      thead.append(tr);
+    }
+    render();
+
     const legendSwatch = (d, label) => h("li", {},
       h("span", { style: `display:inline-block;min-width:20px;height:20px;line-height:20px;text-align:center;border-radius:5px;font-weight:650;font-size:11px;background:${fdrColor(d)};color:${fdrInk(d)}` }, d),
       label);
-    pg.append(card("Next fixtures", "Each team's next five Premier League fixtures, coloured by that team's own difficulty rating (1 = easiest, 5 = hardest). ★ marks a fixture where this team is the stronger side, comparing both teams' home/away strength ratings.",
+    pg.append(card("Next fixtures", "Each team's next five Premier League fixtures, coloured by that team's own difficulty rating (1 = easiest, 5 = hardest). ★ marks a fixture where this team is the stronger side, comparing both teams' home/away strength ratings. Ranked by average difficulty across the ticked rounds — click “Avg FDR” or “Team” to re-sort, or show just the 5 easiest or hardest schedules below.",
       h("ul", { class: "legend" }, [1, 2, 3, 4, 5].map(d => legendSwatch(d, d === 1 ? "Easy" : d === 5 ? "Hard" : ""))),
-      h("div", { class: "tbl-wrap" }, h("table", { class: "fdr heat" },
-        h("thead", {}, h("tr", {}, head.map((x, i) => h("th", { class: i ? "" : "l" }, x)))),
-        h("tbody", {}, rows)))));
+      h("div", { class: "filters" }, showSel),
+      h("p", { class: "sub", style: "margin:10px 0 4px" }, "Rounds included in the ranking:"),
+      h("div", { style: "display:flex;flex-wrap:wrap;gap:12px;margin:2px 0 12px" }, roundToggles),
+      countNote,
+      h("div", { class: "tbl-wrap" }, h("table", { class: "fdr heat" }, thead, body))));
   }
 }
 

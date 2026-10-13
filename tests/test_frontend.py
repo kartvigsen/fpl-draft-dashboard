@@ -140,6 +140,17 @@ class FrontendMarkupTest(unittest.TestCase):
     def test_fixtures_tab_handles_no_fixture_data(self):
         self.assertIn("isn't available yet", HTML)
 
+    def test_fixtures_tab_ranks_by_average_difficulty(self):
+        self.assertIn('{ key: "avg", label: "Avg FDR"', HTML)
+        self.assertIn('makeSortHeader(COLS, "avg", 1)', HTML)
+        self.assertIn("function avgFdr(t)", HTML)
+
+    def test_fixtures_tab_has_round_toggles_and_easiest_hardest_filter(self):
+        self.assertIn('"5 easiest schedules"', HTML)
+        self.assertIn('"5 hardest schedules"', HTML)
+        self.assertIn("Rounds included in the ranking", HTML)
+        self.assertIn("included.filter(Boolean).length <= 1", HTML)
+
     def test_scorer_table_is_sortable_by_name_starts_points_and_avg(self):
         self.assertIn('key: "name"', HTML)
         self.assertIn('key: "starts"', HTML)
