@@ -325,18 +325,23 @@ def build(raw=RAW, now=None):
     # Every player who scored a positive total while in a manager's starting
     # XI, one list per manager. The same real player can appear under more
     # than one manager if they were traded mid-season.
+    # Starts/points fold in the live round's score (like the Standings
+    # total), so they update as the round plays out; best_rounds stays
+    # finished-only, since it's a record.
     scorers_by_manager, best_rounds = {}, []
     for e in eids:
         rows = []
         for el, by_gw in contrib[e].items():
             fin = {g: v for g, v in by_gw.items() if g in complete}
-            if not fin:
+            live_pts = by_gw.get(cur) if (cur and not cur_done and cur in by_gw) else None
+            if not fin and live_pts is None:
                 continue
             for g, v in fin.items():
                 best_rounds.append({**pinfo(el), "points": v, "gw": g, "entry_id": e})
-            pts = sum(fin.values())
+            pts = sum(fin.values()) + (live_pts or 0)
             if pts > 0:
-                rows.append({**pinfo(el), "points": pts, "starts": len(fin)})
+                rows.append({**pinfo(el), "points": pts, "starts": len(fin) + (1 if live_pts is not None else 0),
+                             "live_points": live_pts, "on_squad": owner_by_element.get(el) == e})
         scorers_by_manager[str(e)] = sorted(rows, key=lambda r: (-r["points"], r["name"]))
     best_rounds.sort(key=lambda r: (-r["points"], r["gw"]))
 
