@@ -714,24 +714,6 @@ if (gws.length) {
     return h("div", {}, h("div", { class: "tbl-wrap" }, h("table", {}, thead, body)), more);
   }
   pg.append(section("Scorers by team"));
-  {
-    const POINT_BRACKETS = [
-      [-Infinity, 0, "0"], [1, 10, "1–10"], [11, 20, "11–20"], [21, 30, "21–30"],
-      [31, 40, "31–40"], [41, 50, "41–50"], [51, 75, "51–75"], [76, 100, "76–100"],
-      [101, 200, "101–200"], [201, Infinity, "201–667"],
-    ];
-    const AP = D.all_players || [];
-    const counts = ranked.map(m => POINT_BRACKETS.map(([lo, hi]) =>
-      AP.filter(p => p.owner_entry_id === m.entry_id && p.total_points >= lo && p.total_points <= hi).length));
-    const maxCell = Math.max(1, ...counts.flat());
-    const rows = POINT_BRACKETS.map(([, , label], bi) => h("tr", {}, h("td", { class: "l" }, label),
-      ranked.map((m, mi) => heatCell(counts[mi][bi], maxCell,
-        `${nameOf(m)}, ${label} pts: ${counts[mi][bi]} player${counts[mi][bi] === 1 ? "" : "s"}`))));
-    pg.append(card("Squad by points bracket", "How each manager's current squad (including the bench) splits across season total-points brackets. Darker means more players.",
-      h("div", { class: "tbl-wrap" }, h("table", { class: "heat" },
-        h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Points"), ranked.map(m => h("th", {}, nameOf(m))))),
-        h("tbody", {}, rows)))));
-  }
   pg.append(h("div", { class: "grid-2col" }, ranked.map(m => {
     const all = P.scorers_by_manager[m.entry_id] || [];
     return card(nameOf(m), "All players who scored while in the starting XI, including the live gameweek. Click a column to sort. A green “Squad” label means that player is still on the squad (including the bench).",
@@ -818,6 +800,23 @@ pg = panels.allplayers;
   }
   render();
   pg.append(section("All players"));
+  {
+    const POINT_BRACKETS = [
+      [-Infinity, 0, "0"], [1, 10, "1–10"], [11, 20, "11–20"], [21, 30, "21–30"],
+      [31, 40, "31–40"], [41, 50, "41–50"], [51, 75, "51–75"], [76, 100, "76–100"],
+      [101, 200, "101–200"], [201, Infinity, "201–667"],
+    ];
+    const counts = ranked.map(m => POINT_BRACKETS.map(([lo, hi]) =>
+      AP.filter(p => p.owner_entry_id === m.entry_id && p.total_points >= lo && p.total_points <= hi).length));
+    const maxCell = Math.max(1, ...counts.flat());
+    const rows = POINT_BRACKETS.map(([, , label], bi) => h("tr", {}, h("td", { class: "l" }, label),
+      ranked.map((m, mi) => heatCell(counts[mi][bi], maxCell,
+        `${nameOf(m)}, ${label} pts: ${counts[mi][bi]} player${counts[mi][bi] === 1 ? "" : "s"}`))));
+    pg.append(card("Squad by points bracket", "How each manager's current squad (including the bench) splits across season total-points brackets — \"1–10\" means players who scored 1 to 10 points total this season, not a top-10 ranking. Darker means more players; sort the table below by Total points to see who's who.",
+      h("div", { class: "tbl-wrap" }, h("table", { class: "heat" },
+        h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Points"), ranked.map(m => h("th", {}, nameOf(m))))),
+        h("tbody", {}, rows)))));
+  }
   pg.append(card("Every Premier League player", "Filter, search and sort by clicking a column. Shows every player by default; untick below to only see players who are or have been owned in this league this season.",
     h("div", { class: "filters" }, ownerSel, posSel, clubSel, nameInput),
     h("label", { style: "display:flex;align-items:center;gap:6px;margin:2px 0 12px;font-size:13px;color:var(--ink-2)" },

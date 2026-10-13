@@ -106,14 +106,21 @@ class FrontendMarkupTest(unittest.TestCase):
     def test_squad_pill_reuses_the_free_agent_pill_styling(self):
         self.assertIn(".tag-free, .tag-squad {", HTML)
 
-    def test_points_bracket_pivot_above_the_individual_scorer_tables(self):
+    def test_points_bracket_pivot_lives_on_all_players_above_the_main_table(self):
         self.assertIn("Squad by points bracket", HTML)
         self.assertIn('"1–10"', HTML)
         self.assertIn('"201–667"', HTML)
-        section_order = HTML.index('pg.append(section("Scorers by team"));')
+        # Moved off the Players tab entirely -- it reads All players' AP/
+        # ranked data and sits above that tab's big sortable table, so a
+        # "1-10" bracket can be visually cross-checked against real rows
+        # instead of being misread as a top-10 ranking.
+        section_order = HTML.index('pg.append(section("All players"));')
         pivot_idx = HTML.index("Squad by points bracket")
-        grid_idx = HTML.index('pg.append(h("div", { class: "grid-2col" }, ranked.map(m => {')
-        self.assertTrue(section_order < pivot_idx < grid_idx)
+        table_idx = HTML.index('pg.append(card("Every Premier League player"')
+        self.assertTrue(section_order < pivot_idx < table_idx)
+        self.assertIn("not a top-10 ranking", HTML)
+        players_section = HTML[HTML.index('pg = panels.players;'):HTML.index('/* all players */')]
+        self.assertNotIn("Squad by points bracket", players_section)
 
     def test_scorer_table_is_sortable_by_name_starts_points_and_avg(self):
         self.assertIn('key: "name"', HTML)
