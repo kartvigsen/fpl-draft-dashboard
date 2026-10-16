@@ -277,6 +277,39 @@ class BuildTest(unittest.TestCase):
             shutil.rmtree(d2, ignore_errors=True)
 
 
+class EarlyTransactionGameweekTest(unittest.TestCase):
+    """Waivers/free-agent moves for the next gameweek are often accepted
+    before the draft API's own "current_event" rolls over to it (e.g. GW5 is
+    the last one finished, but GW6's waivers already ran) -- that gameweek
+    must still show up for filtering/display, without being flagged as a
+    missing lineup, since no one has lineups for a gameweek that hasn't
+    started yet."""
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        txs = TXS + [mock.tx(6, 6, 0, "w", "a", 105, 52)]  # GW6: manager A, accepted waiver
+        mock.write_raw(self.tmp, SCORES, current_finished=False, transactions=txs)
+        self.d = build_stats.build(self.tmp)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_the_early_gameweek_appears_as_an_unfinished_round(self):
+        self.assertEqual(self.d["meta"]["current_gw"], 5)
+        gws = [r["gw"] for r in self.d["rounds"]]
+        self.assertIn(6, gws)
+        gw6 = next(r for r in self.d["rounds"] if r["gw"] == 6)
+        self.assertFalse(gw6["finished"])
+        self.assertTrue(all(v is None for v in gw6["scores"].values()))
+
+    def test_it_is_not_reported_as_a_missing_lineup(self):
+        self.assertEqual(self.d["checks"]["missing_lineups"], [])
+        self.assertTrue(self.d["checks"]["all_ok"])
+
+    def test_its_accepted_move_is_counted_in_the_transactions_matrix(self):
+        entry_id = str(self.d["managers"][0]["entry_id"])
+        self.assertEqual(self.d["transactions"]["matrix"][entry_id]["6"], 1)
+
+
 def write_all_players_fixture(root):
     """A minimal league (no gameweeks played yet) with four Premier League
     players in different ownership/draft situations, to check the "all
