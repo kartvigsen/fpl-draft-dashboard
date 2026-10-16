@@ -60,8 +60,16 @@ def build(raw=RAW, now=None):
     cur = int(game.get("current_event") or 0)
     cur_done = bool(game.get("current_event_finished"))
     last_final = cur if cur_done else cur - 1
-    all_gws = list(range(1, cur + 1))
+    # Waivers/free-agent moves for the next gameweek are often processed
+    # before the draft API's own "current_event" rolls over to it, so a
+    # gameweek can have transactions before it's otherwise visible here.
+    max_tx_gw = max((t.get("event") for t in tx_raw if isinstance(t.get("event"), int)), default=0)
+    all_gws = list(range(1, max(cur, max_tx_gw) + 1))
     fin_gws = [g for g in all_gws if g <= last_final]
+    # Lineups/live points only exist once a gameweek has actually started --
+    # unlike all_gws, this stays bounded to cur so a future gameweek that
+    # only has early transactions isn't reported as a missing lineup.
+    started_gws = list(range(1, cur + 1))
 
     # ---- managers -------------------------------------------------------
     entries = sorted(details.get("league_entries", []), key=lambda e: e["entry_id"])
@@ -95,7 +103,7 @@ def build(raw=RAW, now=None):
 
     # ---- live points per gameweek --------------------------------------
     pp = {}  # gw -> {element: points}
-    for gw in all_gws:
+    for gw in started_gws:
         live = _load(raw / "live" / f"gw{gw}.json", {}) or {}
         elems = live.get("elements", {}) or {}
         pp[gw] = {int(k): (v.get("stats", {}) or {}).get("total_points", 0) or 0
@@ -111,7 +119,7 @@ def build(raw=RAW, now=None):
     xi_size = {}
     mismatches = []
     missing = []
-    for gw in all_gws:
+    for gw in started_gws:
         for eid in eids:
             data = _load(raw / "entries" / str(eid) / f"gw{gw}.json")
             if not data or not data.get("picks"):
