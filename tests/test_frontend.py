@@ -285,6 +285,10 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("PM[m.entry_id].rank", HTML)
         self.assertIn("`GW${g} live`", HTML)
 
+    def test_data_checks_explains_an_unsubbed_live_total_instead_of_flagging_it(self):
+        self.assertIn('"through_finished_plus_live_unsubbed"', HTML)
+        self.assertIn("site's live round isn't subbed yet", HTML)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1125,9 +1125,11 @@ const foot = h("div", { class: "foot" },
   h("p", {}, "How the numbers work: a round score is the total of a manager's starting XI after automatic substitutions. Standings and total points update live while a gameweek is in progress; rounds won and records only count once it finishes. Ties for the top score count as a win for every tied manager. Transactions count accepted moves only."),
   h("p", {}, "Data comes from the public FPL Draft API, which is unofficial and can change without notice."));
 const dl = h("details", {}, h("summary", {}, chk.all_ok ? "Data checks: all passed" : "Data checks: please review"));
+const matchLabel = m => m === "through_finished_plus_live_unsubbed" ? "Match (site's live round isn't subbed yet)"
+  : m ? "Match" : "DIFFERENT";
 const chkRows = chk.standings.map(c => h("tr", {}, h("td", { class: "l" }, nameOf(byId[c.entry_id])),
   h("td", { class: "num" }, fmt(c.site_total)), h("td", { class: "num" }, fmt(c.computed_through_current)),
-  h("td", { class: "num" }, fmt(c.computed_through_finished)), h("td", {}, c.matches ? "Match" : "DIFFERENT")));
+  h("td", { class: "num" }, fmt(c.computed_through_finished)), h("td", {}, matchLabel(c.matches))));
 dl.append(h("div", { class: "tbl-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Team", "Site total", "Calculated incl. live GW", "Calculated finished GWs", "Result"].map((x, i) => h("th", { class: i ? "" : "l" }, x)))),
   h("tbody", {}, chkRows))));
 if (chk.lineup_vs_official_mismatches.length) dl.append(h("p", { class: "sub" }, `${chk.lineup_vs_official_mismatches.length} lineup(s) where calculated and official round points differ.`));
