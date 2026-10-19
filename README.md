@@ -16,7 +16,7 @@ python3 update.py
 
 Then open `docs/index.html` in a browser. That is the whole routine.
 
-The dashboard has eight tabs: Overview, Rounds, Transactions, Players, Live round, All players, Fixtures and Feedback. You can link straight to one, for example `index.html#rounds`.
+The dashboard has seven tabs: Overview, Live round, Rounds, Team info, Transactions, Fixtures and All players. You can link straight to one, for example `index.html#rounds`.
 
 - Run it any time, including while a gameweek is still in progress — standings and each manager's total points update live. Records and "rounds won" still only count once a gameweek finishes, since bonus points and other adjustments aren't final until then.
 - Finished gameweeks are cached in `data/raw/`, so later runs only download the newest gameweek.
@@ -59,10 +59,6 @@ If you use the included `.github/workflows/update.yml`, the dashboard rebuilds i
 - **All moves** can be filtered by team, type (free agent/waiver), result (accepted/denied, shown in green/red), gameweek and player name (matches either the player brought in or let go). It shows 12 rows at a time with a "Show all" button; changing a filter goes back to 12 rows of the new, filtered list. There's no Net/points column here — see the Players tab for scoring.
 - **Moves per gameweek** (the heat map) lists teams by current league standing, not by the order they were added to the league.
 
-## Players tab
-
-One table per team of every player who scored a positive total while in that manager's starting XI, with columns for starts, points and average points per start — click a column header to sort by it (click again to reverse). Starts and points include the live gameweek while a round is in progress, same as the Standings total. Sorted by points by default; the top 5 show directly and the rest show under "Show N more players". A player who was traded mid-season appears under both teams, with the points they scored for each. A green "Squad" label next to a name means that player is still on the manager's squad, including the bench — not just the ones who started the round they scored in. Teams are laid out two per row.
-
 ## Live round tab
 
 Everyone's lineup for the current (or just-finished) gameweek, without needing to open the official app. Click a manager's name to switch between a visual pitch view of their squad — starting XI grouped by position (keeper at the top, then defenders, midfielders and forwards), bench below — with each player's points for the round and a badge for the captain (C) and vice-captain (V). A line never splits across rows, even a back five or a five-man midfield. Tap a player for their full stats (minutes, goals, assists, clean sheet, defensive contribution).
@@ -70,6 +66,10 @@ Everyone's lineup for the current (or just-finished) gameweek, without needing t
 Below that, every Premier League player's points and extra stats (minutes, goals, assists, clean sheets, defensive contribution) for the round, highest first — filter by owner (including "Free agent"), club or position, or click a column to sort. Shows the top 20 by default; "Show all" expands to every player, and changing a filter collapses it back to 20.
 
 This updates whenever `update.py` runs (a few times a day on the included schedule), not in real time.
+
+## Team info tab
+
+One table per team of every player who scored a positive total while in that manager's starting XI, with columns for starts, points and average points per start — click a column header to sort by it (click again to reverse). Starts and points include the live gameweek while a round is in progress, same as the Standings total. Sorted by points by default; the top 5 show directly and the rest show under "Show N more players". A player who was traded mid-season appears under both teams, with the points they scored for each. A green "Squad" label next to a name means that player is still on the manager's squad, including the bench — not just the ones who started the round they scored in. Teams are laid out two per row.
 
 ## All players tab
 
@@ -90,14 +90,6 @@ Every Premier League team's next five fixtures (real match fixtures, nothing to 
 Teams are ranked by **Avg FDR**, the average difficulty of their next fixtures, easiest first — click "Avg FDR" or "Team" to re-sort. Untick one of the five "Fixture" checkboxes to leave that round out of the ranking (and the table); at least one must stay ticked. The dropdown above narrows the table to just the 5 teams with the easiest or hardest run of fixtures.
 
 This data comes from the classic (non-draft) FPL API, fetched best-effort: if it's briefly unreachable on an update run, the tab just keeps showing whatever was cached last time rather than breaking the rest of the update.
-
-## Feedback
-
-The **Feedback** button in the header (and the **Feedback** tab) opens a new GitHub issue on this repository, labeled `feedback`, with the tab you were viewing pre-filled in the title and body. The Feedback tab also has its own box to type feedback directly — it opens the same pre-filled issue, just with your text in the body instead. You'll need a GitHub account to actually post it, since the site itself has nowhere to store submissions (no server, no database).
-
-Below the box, the tab lists every `feedback`-labeled issue on this repository (title, status, author, date, reply count), fetched live from the public GitHub API in your browser. **Implemented** (green) means the issue has been closed; **Open** (red) means it hasn't yet — mark one implemented by closing it on GitHub. Pull requests are filtered out, and only `https://github.com/` links are ever followed. If GitHub rate-limits the request, the tab shows a message and a **Retry** button instead of breaking.
-
-`feedback:in-progress` and `feedback:needs-input` are reserved labels: they mark a feedback issue that's already been picked up (a PR is open against it, or it needs clarification from whoever filed it) so it isn't picked up again. Nothing currently applies them automatically — see the note below.
 
 ## New season
 
