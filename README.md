@@ -67,7 +67,7 @@ One table per team of every player who scored a positive total while in that man
 
 Everyone's lineup for the current (or just-finished) gameweek, without needing to open the official app. Click a manager's name to switch between a visual pitch view of their squad — starting XI grouped by position (keeper at the top, then defenders, midfielders and forwards), bench below — with each player's points for the round and a badge for the captain (C) and vice-captain (V). A line never splits across rows, even a back five or a five-man midfield. Tap a player for their full stats (minutes, goals, assists, clean sheet, defensive contribution).
 
-Below that, every Premier League player's points and extra stats (minutes, goals, assists, clean sheets, defensive contribution) for the round, highest first — filter by club or position, or click a column to sort. Shows the top 20 by default; "Show all" expands to every player, and changing a filter collapses it back to 20.
+Below that, every Premier League player's points and extra stats (minutes, goals, assists, clean sheets, defensive contribution) for the round, highest first — filter by owner (including "Free agent"), club or position, or click a column to sort. Shows the top 20 by default; "Show all" expands to every player, and changing a filter collapses it back to 20.
 
 This updates whenever `update.py` runs (a few times a day on the included schedule), not in real time.
 
