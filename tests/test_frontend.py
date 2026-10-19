@@ -218,13 +218,13 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("allRoundVals", HTML)
         self.assertIn("const allLo = Math.min(...allRoundVals), allHi = Math.max(...allRoundVals);", HTML)
 
-    def test_all_players_tab_is_between_players_and_feedback(self):
+    def test_tab_order_matches_the_requested_layout(self):
         tabs_line = re.search(r'const TABS = \[.*?\];', HTML).group(0)
         order = [k for k in re.findall(r'\["(\w+)",', tabs_line)]
-        self.assertEqual(order.index("liveround"), order.index("players") + 1)
-        self.assertEqual(order.index("allplayers"), order.index("liveround") + 1)
-        self.assertEqual(order.index("fixtures"), order.index("allplayers") + 1)
-        self.assertEqual(order.index("feedback"), order.index("fixtures") + 1)
+        self.assertEqual(order, ["overview", "liveround", "rounds", "players", "transactions", "fixtures", "allplayers"])
+
+    def test_players_tab_is_labeled_team_info(self):
+        self.assertIn('["players", "Team info"]', HTML)
 
     def test_all_players_table_has_the_required_columns(self):
         for key in ("name", "club", "pos", "draft_pick", "owner", "total_points", "avg_points"):
@@ -256,7 +256,7 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("border-radius: 999px", HTML)
 
     def test_all_players_columns_are_sortable(self):
-        header = HTML[HTML.index("/* all players */"):HTML.index("/* feedback */")]
+        header = HTML[HTML.index("/* all players */"):HTML.index("/* footer + checks */")]
         self.assertIn("makeSortHeader(COLS", header)
         self.assertIn("sorter.row(render)", header)
 
@@ -267,43 +267,17 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("makeSortHeader(SCORER_COLS", HTML)
         self.assertIn("makeSortHeader(COLS", HTML)
 
-    def test_feedback_button_and_tab_exist(self):
-        self.assertIn('"feedback", "Feedback"', HTML)
-        self.assertIn("openFeedbackIssue", HTML)
-        self.assertIn('"Feedback"', HTML)
+    def test_tab_bar_does_not_rubber_band_when_swiped(self):
+        self.assertIn("overscroll-behavior-x: contain;", HTML)
 
-    def test_feedback_button_is_next_to_theme_toggle(self):
+    def test_feedback_is_removed(self):
+        for needle in ("Feedback", "feedback", "openFeedbackIssue", "activeTabLabel"):
+            self.assertNotIn(needle, HTML)
+
+    def test_header_only_has_the_theme_toggle(self):
         header = re.search(r'app\.append\(h\("header".*?\)\)\);', HTML, re.S).group(0)
-        self.assertIn("openFeedbackIssue", header)
         self.assertIn("toggleTheme", header)
-
-    def test_feedback_issue_link_targets_this_repo(self):
-        self.assertIn('kartvigsen/fpl-draft-dashboard', HTML)
-        self.assertIn("/issues/new?title=", HTML)
-
-    def test_feedback_tab_fetches_issues_client_side_and_filters_prs(self):
-        self.assertIn("api.github.com/repos/${REPO}/issues", HTML)
-        self.assertIn("!it.pull_request", HTML)
-
-    def test_feedback_box_files_a_labeled_issue(self):
-        self.assertIn('h("textarea"', HTML)
-        self.assertIn("Submit feedback", HTML)
-        self.assertIn("labels=feedback", HTML)
-
-    def test_feedback_list_only_shows_feedback_labeled_issues(self):
-        self.assertIn("labels=feedback", HTML)
-
-    def test_feedback_status_shown_as_green_or_red(self):
-        self.assertIn('"Implemented"', HTML)
-        self.assertIn('class: implemented ? "up" : "down"', HTML)
-
-    def test_feedback_tab_only_follows_github_links(self):
-        self.assertIn('it.html_url.startsWith("https://github.com/")', HTML)
-
-    def test_feedback_tab_handles_rate_limiting_with_retry(self):
-        self.assertIn("rate-limited", HTML)
-        self.assertIn("res.status === 403 || res.status === 429", HTML)
-        self.assertIn("Retry", HTML)
+        self.assertEqual(header.count('h("button"'), 1)
 
 
 if __name__ == "__main__":
