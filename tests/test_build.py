@@ -371,6 +371,149 @@ def write_live_round_fixture(root):
     })
 
 
+def write_auto_sub_fixture(root, keeper_minutes=90, bench_keeper_minutes=90):
+    """One manager, one gameweek still in progress (the draft API hasn't
+    filled in "subs" yet): two starting midfielders didn't play (0
+    minutes), and so did the first two bench outfielders -- only the
+    last bench slot (a defender who played) is a usable substitute.
+    Mirrors a real case reported against the live dashboard (multiple
+    blanks in the XI, with the bench itself mostly blank too)."""
+    _dump(root, "game.json", {"current_event": 1, "current_event_finished": False})
+    _dump(root, "bootstrap.json", {
+        "elements": [
+            {"id": 1, "web_name": "Keeper", "element_type": 1, "team": 1},
+            {"id": 2, "web_name": "Defender", "element_type": 2, "team": 1},
+            {"id": 3, "web_name": "BlankMidA", "element_type": 3, "team": 1},
+            {"id": 4, "web_name": "BlankMidB", "element_type": 3, "team": 1},
+            {"id": 5, "web_name": "Striker", "element_type": 4, "team": 1},
+            {"id": 12, "web_name": "BenchKeeper", "element_type": 1, "team": 1},
+            {"id": 13, "web_name": "BlankSubA", "element_type": 2, "team": 1},
+            {"id": 14, "web_name": "BlankSubB", "element_type": 3, "team": 1},
+            {"id": 15, "web_name": "UsableSub", "element_type": 2, "team": 1},
+        ],
+        "teams": [{"id": 1, "short_name": "ARS"}],
+    })
+    _dump(root, "live/gw1.json", {"elements": {
+        "1": {"stats": {"total_points": 2 if keeper_minutes else 0, "minutes": keeper_minutes}},
+        "2": {"stats": {"total_points": 6, "minutes": 90}},
+        "3": {"stats": {"total_points": 0, "minutes": 0}},
+        "4": {"stats": {"total_points": 0, "minutes": 0}},
+        "5": {"stats": {"total_points": 4, "minutes": 90}},
+        "12": {"stats": {"total_points": 2 if bench_keeper_minutes else 0, "minutes": bench_keeper_minutes}},
+        "13": {"stats": {"total_points": 0, "minutes": 0}},
+        "14": {"stats": {"total_points": 0, "minutes": 0}},
+        "15": {"stats": {"total_points": 9, "minutes": 90}},
+    }})
+    _dump(root, "entries/201/gw1.json", {"picks": [
+        {"element": 1, "position": 1, "multiplier": 1, "is_captain": False, "is_vice_captain": False},
+        {"element": 2, "position": 2, "multiplier": 1, "is_captain": False, "is_vice_captain": False},
+        {"element": 3, "position": 6, "multiplier": 1, "is_captain": False, "is_vice_captain": False},
+        {"element": 4, "position": 8, "multiplier": 1, "is_captain": False, "is_vice_captain": False},
+        {"element": 5, "position": 10, "multiplier": 1, "is_captain": False, "is_vice_captain": False},
+        {"element": 12, "position": 12, "multiplier": 1, "is_captain": False, "is_vice_captain": False},
+        {"element": 13, "position": 13, "multiplier": 1, "is_captain": False, "is_vice_captain": False},
+        {"element": 14, "position": 14, "multiplier": 1, "is_captain": False, "is_vice_captain": False},
+        {"element": 15, "position": 15, "multiplier": 1, "is_captain": False, "is_vice_captain": False},
+    ], "subs": [], "entry_history": {}})
+    _dump(root, "transactions.json", [])
+    _dump(root, "element_status.json", {"element_status": []})
+    _dump(root, "draft_choices.json", [])
+    _dump(root, "league_details.json", {
+        "league": {"id": 1, "name": "Sub League"},
+        "league_entries": [{"entry_id": 201, "id": 9001, "entry_name": "Solo Team",
+                            "player_first_name": "Sam", "player_last_name": "Solo", "short_name": "SOL"}],
+        "standings": [{"league_entry": 9001, "total": 0}],
+    })
+
+
+class ProvisionalAutoSubTest(unittest.TestCase):
+    """When a gameweek is still in progress, the draft API's own "subs"
+    list is empty -- build_stats must apply the same automatic
+    substitution rule itself, rather than just summing blanks as 0."""
+    def score(self, **kwargs):
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            write_auto_sub_fixture(tmp, **kwargs)
+            d = build_stats.build(tmp)
+            return d["rounds"][0]["scores"]["201"]
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_cascades_past_blank_bench_players_to_the_first_one_who_played(self):
+        # Raw XI (no subs) would be 2+6+0+0+4 = 12. Both bench outfielders
+        # ahead of the usable one are themselves blank, so only one swap
+        # actually happens -- the usable sub's 9 points come in once,
+        # covering one of the two blank midfielders; the other stays blank.
+        self.assertEqual(self.score(), 12 + 9)
+
+    def test_the_live_round_tab_lineup_reflects_the_same_substitution(self):
+        # The pitch view in the Live round tab has its own, separate read
+        # of the lineup -- it must show the same substitution (the usable
+        # sub actually in the XI, not the blank they replaced), so what's
+        # displayed always adds up to the same total shown alongside it.
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            write_auto_sub_fixture(tmp)
+            d = build_stats.build(tmp)
+            team = d["current_round"]["teams"][0]
+            xi_names = {p["name"] for p in team["xi"]}
+            bench_names = {p["name"] for p in team["bench"]}
+            self.assertIn("UsableSub", xi_names)
+            self.assertIn("BlankSubA", bench_names)
+            self.assertIn("BlankSubB", bench_names)
+            self.assertEqual(sum(p["points"] for p in team["xi"]), team["score"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_a_bench_player_who_also_has_0_minutes_is_not_a_valid_substitute(self):
+        # If the single usable bench player is removed (also blanked),
+        # neither blank midfielder can be covered, so the score is just
+        # the raw sum with both blanks still at 0.
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            write_auto_sub_fixture(tmp)
+            live_path = tmp / "live" / "gw1.json"
+            live = json.loads(live_path.read_text())
+            live["elements"]["15"]["stats"]["minutes"] = 0
+            live_path.write_text(json.dumps(live))
+            d = build_stats.build(tmp)
+            self.assertEqual(d["rounds"][0]["scores"]["201"], 12)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_blank_keeper_is_only_ever_covered_by_the_bench_keeper(self):
+        # Starting keeper blanks (0 pts); the bench keeper played and
+        # scored 2, so their points replace the keeper's -- on top of
+        # the outfield sub (Defender 6 + UsableSub 9 + Striker 4).
+        self.assertEqual(self.score(keeper_minutes=0), 2 + 6 + 9 + 4)
+
+    def test_a_bench_keeper_who_also_blanked_cannot_cover_the_keeper(self):
+        # Neither keeper played, so no swap happens and the keeper slot
+        # stays at 0 -- only the outfield sub still applies.
+        self.assertEqual(self.score(keeper_minutes=0, bench_keeper_minutes=0), 0 + 6 + 9 + 4)
+
+    def test_official_subs_from_the_api_are_still_preferred_once_present(self):
+        # Once the gameweek is finished, the draft API provides its own
+        # authoritative "subs" -- build_stats must use that instead of
+        # computing its own, even if it looks different.
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            write_auto_sub_fixture(tmp)
+            game_path = tmp / "game.json"
+            game_path.write_text(json.dumps({"current_event": 1, "current_event_finished": True}))
+            entry_path = tmp / "entries" / "201" / "gw1.json"
+            data = json.loads(entry_path.read_text())
+            data["subs"] = [{"element_out": 4, "element_in": 12, "event": 1}]
+            entry_path.write_text(json.dumps(data))
+            d = build_stats.build(tmp)
+            # Official subs swap element 4 (blank) for element 12 (2 pts),
+            # not element 15 -- a different result than our own rule would
+            # give, proving the official data wins.
+            self.assertEqual(d["rounds"][0]["scores"]["201"], 12 + 2)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
 class LiveRoundTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())

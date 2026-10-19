@@ -102,12 +102,39 @@ def build(raw=RAW, now=None):
         return {"id": eid_, **info}
 
     # ---- live points per gameweek --------------------------------------
-    pp = {}  # gw -> {element: points}
+    pp = {}      # gw -> {element: points}
+    mins = {}    # gw -> {element: minutes played}
     for gw in started_gws:
         live = _load(raw / "live" / f"gw{gw}.json", {}) or {}
         elems = live.get("elements", {}) or {}
         pp[gw] = {int(k): (v.get("stats", {}) or {}).get("total_points", 0) or 0
                   for k, v in elems.items()}
+        mins[gw] = {int(k): (v.get("stats", {}) or {}).get("minutes", 0) or 0
+                    for k, v in elems.items()}
+
+    def provisional_subs(xi, bench, minutes_map):
+        """The draft API only fills in "subs" once a gameweek is final, so a
+        round still in progress needs its own provisional read of the same
+        rule: a starting player with 0 minutes is covered by the next bench
+        player (in bench order) who actually played -- a keeper only ever
+        covers a keeper. This doesn't check formation validity, which the
+        real rule does, but matches it for the common case.
+        """
+        is_gk = lambda e: players.get(e, {}).get("pos") == "GKP"
+        gk_out = next((e for e in xi if is_gk(e) and minutes_map.get(e, 0) == 0), None)
+        gk_in = next((e for e in bench if is_gk(e) and minutes_map.get(e, 0) > 0), None)
+        if gk_out and gk_in:
+            xi[xi.index(gk_out)] = gk_in
+            bench[bench.index(gk_in)] = gk_out
+        bench_outfield = [e for e in bench if not is_gk(e)]
+        for out_ in [e for e in xi if not is_gk(e) and minutes_map.get(e, 0) == 0]:
+            in_ = next((e for e in bench_outfield if minutes_map.get(e, 0) > 0), None)
+            if in_ is None:
+                continue
+            xi[xi.index(out_)] = in_
+            bench[bench.index(in_)] = out_
+            bench_outfield.remove(in_)
+        return xi, bench
 
     # ---- lineups & round scores ----------------------------------------
     scores = {gw: {} for gw in all_gws}        # gw -> {eid: points or None}
@@ -129,11 +156,15 @@ def build(raw=RAW, now=None):
             picks = sorted(data["picks"], key=lambda p: p.get("position", 99))
             xi = [p["element"] for p in picks if p.get("position", 99) <= 11]
             bench = [p["element"] for p in picks if p.get("position", 99) > 11]
-            for s in data.get("subs") or []:
-                out_, in_ = s.get("element_out"), s.get("element_in")
-                if out_ in xi and in_ in bench:  # ignore if picks are already post-sub
-                    xi[xi.index(out_)] = in_
-                    bench[bench.index(in_)] = out_
+            subs_raw = data.get("subs") or []
+            if subs_raw:
+                for s in subs_raw:
+                    out_, in_ = s.get("element_out"), s.get("element_in")
+                    if out_ in xi and in_ in bench:  # ignore if picks are already post-sub
+                        xi[xi.index(out_)] = in_
+                        bench[bench.index(in_)] = out_
+            else:
+                xi, bench = provisional_subs(xi, bench, mins.get(gw, {}))
             pts_map = pp.get(gw, {})
             comp = sum(pts_map.get(e, 0) for e in xi)
             computed[gw][eid] = comp
@@ -257,11 +288,15 @@ def build(raw=RAW, now=None):
             picks = sorted((data or {}).get("picks") or [], key=lambda p: p.get("position", 99))
             xi = [p["element"] for p in picks if p.get("position", 99) <= 11]
             bn = [p["element"] for p in picks if p.get("position", 99) > 11]
-            for s in (data or {}).get("subs") or []:
-                out_, in_ = s.get("element_out"), s.get("element_in")
-                if out_ in xi and in_ in bn:
-                    xi[xi.index(out_)] = in_
-                    bn[bn.index(in_)] = out_
+            subs_raw = (data or {}).get("subs") or []
+            if subs_raw:
+                for s in subs_raw:
+                    out_, in_ = s.get("element_out"), s.get("element_in")
+                    if out_ in xi and in_ in bn:
+                        xi[xi.index(out_)] = in_
+                        bn[bn.index(in_)] = out_
+            else:
+                xi, bn = provisional_subs(xi, bn, mins.get(cur, {}))
             flags = {p["element"]: p for p in picks}
 
             def squad_row(el, flags=flags):

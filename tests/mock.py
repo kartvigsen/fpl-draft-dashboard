@@ -28,17 +28,20 @@ def write_raw(root, gw_scores, current_finished=False, subs=None, bench=None,
               transactions=None, league_name="Demo League", people=None,
               spread=False, seed=1, official=None, standings_ok=True,
               free_agent_points=None, element_status=None, draft_choices=None,
-              classic_teams=None, fixtures=None):
+              classic_teams=None, fixtures=None, live_minutes_override=None):
     """gw_scores: list (per gameweek) of per-manager XI point targets.
 
     The last gameweek is the current one. It is treated as in progress unless
     current_finished is True.
     subs: {(gw, manager_index): (out_slot, in_slot)} automatic substitution.
     bench: {(gw, manager_index): points} points on the bench (slot 13).
+    live_minutes_override: {(gw, element): minutes} to simulate a blank (0
+    minutes) player -- every player is a full 90 minutes otherwise.
     official: {(gw, manager_index): points} to include as entry_history.points.
     """
     rng = random.Random(seed)
     subs, bench, official = subs or {}, bench or {}, official or {}
+    live_minutes_override = live_minutes_override or {}
     n_gw = len(gw_scores)
     n_m = len(gw_scores[0])
     people = people or [("Alex", "Andersen", "Team Alpha"), ("Bo", "Berg", "Team Bravo"),
@@ -106,7 +109,12 @@ def write_raw(root, gw_scores, current_finished=False, subs=None, bench=None,
                                                                      rng.randint(0, 9) if spread else 0)
         live_all[gw] = pts
         _dump(root, f"live/gw{gw}.json",
-              {"elements": {str(e): {"stats": {"total_points": v}} for e, v in pts.items()}})
+              # minutes defaults to a full match for every mocked player, so a
+              # test has to opt in (via live_minutes_override) to simulate a
+              # blank -- these fixtures are about points, not realistic minutes.
+              {"elements": {str(e): {"stats": {"total_points": v,
+                                               "minutes": live_minutes_override.get((gw, e), 90)}}
+                           for e, v in pts.items()}})
 
     for gw in range(1, n_gw + 1):
         for m, eid in enumerate(entry_ids):
