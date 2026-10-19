@@ -97,6 +97,10 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("rankedList(P.best_rounds", section)
         self.assertNotIn('class: "plist"', section)
 
+    def test_biggest_single_player_rounds_labels_the_live_round(self):
+        self.assertIn("D.live_round && p.gw === D.live_round.gw", HTML)
+        self.assertIn("Includes the live round in progress", HTML)
+
     def test_scorer_table_is_a_single_table_so_expanded_rows_stay_aligned(self):
         # Splitting the visible/expanded rows into two separate <table>
         # elements let each size its columns independently, so the "show

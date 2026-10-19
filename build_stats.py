@@ -457,8 +457,10 @@ def build(raw=RAW, now=None):
     # XI, one list per manager. The same real player can appear under more
     # than one manager if they were traded mid-season.
     # Starts/points fold in the live round's score (like the Standings
-    # total), so they update as the round plays out; best_rounds stays
-    # finished-only, since it's a record.
+    # total), so they update as the round plays out. best_rounds also
+    # includes the live round's performances (frontend labels that entry
+    # "live"), same treatment as the Rounds tab's points-per-round chart --
+    # it just isn't eligible to be *the* season-high until the round ends.
     scorers_by_manager, best_rounds = {}, []
     for e in eids:
         rows = []
@@ -469,6 +471,8 @@ def build(raw=RAW, now=None):
                 continue
             for g, v in fin.items():
                 best_rounds.append({**pinfo(el), "points": v, "gw": g, "entry_id": e})
+            if live_pts is not None:
+                best_rounds.append({**pinfo(el), "points": live_pts, "gw": cur, "entry_id": e})
             pts = sum(fin.values()) + (live_pts or 0)
             if pts > 0:
                 rows.append({**pinfo(el), "points": pts, "starts": len(fin) + (1 if live_pts is not None else 0),
