@@ -148,16 +148,19 @@ details .tbl-wrap { margin-top: 8px; }
 .teamtab:hover:not([aria-selected="true"]) { background: var(--surface); }
 .pitch {
   background: linear-gradient(180deg, #1f7a4d, #185f3d); border-radius: 14px;
-  padding: 18px 10px; display: flex; flex-direction: column; gap: 14px; margin: 10px 0;
+  padding: 18px 8px; display: flex; flex-direction: column; gap: 10px; margin: 10px 0;
 }
-.pitch-row { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+/* A line can hold up to 5 (a back-5 or a midfield-5), so rows never wrap --
+   chips shrink to fit instead, down to a readable floor; tap one for the rest. */
+.pitch-row { display: flex; justify-content: center; align-items: flex-start; gap: 4px; flex-wrap: nowrap; }
 .bench-wrap { margin-top: 4px; }
-.bench-row { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.bench-row { display: flex; justify-content: center; gap: 4px; flex-wrap: nowrap; margin-top: 8px; }
 .player-chip {
   position: relative; background: rgba(255,255,255,.96); color: #0b0b0b; border-radius: 10px;
-  padding: 7px 8px 6px; width: 92px; text-align: center; font-size: 11px;
-  box-shadow: 0 2px 6px rgba(0,0,0,.25);
+  padding: 7px 4px 6px; flex: 0 1 19%; min-width: 0; max-width: 92px; text-align: center; font-size: 11px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.25); border: 0; font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
+.player-chip:hover, .player-chip:focus-visible { filter: brightness(1.04); }
 .player-chip .nm { font-weight: 700; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .player-chip .cl { color: #6b6a65; font-size: 10px; }
 .player-chip .pt { font-size: 16px; font-weight: 800; margin: 3px 0 1px; }
@@ -168,6 +171,18 @@ details .tbl-wrap { margin-top: 8px; }
 }
 .player-chip .badge.c { background: #eda100; }
 .player-chip .badge.vc { background: #d8d8d3; }
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 50;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.modal-card {
+  background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 14px;
+  padding: 18px; max-width: 320px; width: 100%; box-shadow: 0 12px 40px rgba(0,0,0,.35);
+}
+.modal-card .pts { font-size: 30px; font-weight: 800; margin: 10px 0; }
+.modal-stats { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; margin: 0; font-size: 13.5px; }
+.modal-stats dt { color: var(--ink-2); }
+.modal-stats dd { margin: 0; font-weight: 650; text-align: right; font-variant-numeric: tabular-nums; }
 .foot { margin-top: 40px; color: var(--ink-2); font-size: 12.5px; }
 .foot p { margin: 4px 0; }
 .empty { color: var(--ink-2); font-size: 13.5px; padding: 8px 0; }
@@ -781,7 +796,7 @@ pg.append(section("Live round"));
     pg.append(h("p", { class: "sub" },
       `Gameweek ${CR.gw}${CR.finished ? " (finished)" : " (in progress)"} — updates a few times a day, not in real time.`));
 
-    const POS_ORDER = ["FWD", "MID", "DEF", "GKP"];
+    const POS_ORDER = ["GKP", "DEF", "MID", "FWD"];
     const statLine = p => {
       const parts = [];
       if (p.minutes) parts.push(`${p.minutes}'`);
@@ -791,7 +806,28 @@ pg.append(section("Live round"));
       if (p.defensive_contribution) parts.push(`${p.defensive_contribution}DC`);
       return parts.join(" · ") || "–";
     };
-    const chip = p => h("div", { class: "player-chip" },
+
+    const modalBackdrop = h("div", { class: "modal-backdrop", hidden: true,
+      onclick: ev => { if (ev.target === modalBackdrop) closeModal(); } });
+    const modalCard = h("div", { class: "modal-card", role: "dialog", "aria-modal": "true" });
+    modalBackdrop.append(modalCard);
+    function closeModal() { modalBackdrop.hidden = true; }
+    document.addEventListener("keydown", ev => { if (ev.key === "Escape" && !modalBackdrop.hidden) closeModal(); });
+    const statRow = (label, value) => [h("dt", {}, label), h("dd", {}, value)];
+    function openPlayerModal(p) {
+      modalCard.textContent = "";
+      const role = p.is_captain ? " · Captain" : p.is_vice_captain ? " · Vice-captain" : "";
+      modalCard.append(
+        h("button", { type: "button", class: "ghost", style: "float:right", onclick: closeModal }, "Close"),
+        h("h3", {}, p.name), h("p", { class: "sub" }, `${p.team} · ${p.pos}${role}`),
+        h("p", { class: "pts" }, `${fmt(p.points)} pts`),
+        h("dl", { class: "modal-stats" },
+          statRow("Minutes", fmt(p.minutes)), statRow("Goals", fmt(p.goals_scored)),
+          statRow("Assists", fmt(p.assists)), statRow("Clean sheet", p.clean_sheets ? "Yes" : "No"),
+          statRow("Defensive contribution", fmt(p.defensive_contribution))));
+      modalBackdrop.hidden = false;
+    }
+    const chip = p => h("button", { type: "button", class: "player-chip", onclick: () => openPlayerModal(p) },
       p.is_captain ? h("span", { class: "badge c", title: "Captain" }, "C") :
         p.is_vice_captain ? h("span", { class: "badge vc", title: "Vice-captain" }, "V") : null,
       h("div", { class: "nm" }, p.name), h("div", { class: "cl" }, p.team),
@@ -822,8 +858,8 @@ pg.append(section("Live round"));
         h("p", { class: "sub" }, "Bench"), h("div", { class: "bench-row" }, t.bench.map(chip))));
     }
     paintPitch();
-    pg.append(card("Team lineups", "Captain (C) and vice-captain (V) are marked. Click a team to switch.",
-      h("div", { class: "teamtabs", role: "tablist" }, tabs), pitchHost));
+    pg.append(card("Team lineups", "Captain (C) and vice-captain (V) are marked. Click a team to switch, or a player for their full stats.",
+      h("div", { class: "teamtabs", role: "tablist" }, tabs), pitchHost), modalBackdrop);
 
     const clubs = [...new Set(CR.all_players.map(p => p.team))].filter(Boolean).sort();
     const positions = ["GKP", "DEF", "MID", "FWD"];
