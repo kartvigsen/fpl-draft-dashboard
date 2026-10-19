@@ -81,8 +81,21 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn('h("details"', HTML)
         self.assertIn("more player", HTML)
 
-    def test_players_tab_uses_a_2column_grid(self):
-        self.assertIn("grid-2col", HTML)
+    def test_team_info_tab_switches_between_teams_instead_of_a_grid_of_cards(self):
+        self.assertNotIn("grid-2col", HTML)
+        section = HTML[HTML.index('pg.append(section("Scorers by team"))'):HTML.index("const benchRows")]
+        self.assertIn('class: "teamtab"', section)
+        self.assertIn("activeEntryId = m.entry_id; paintTeam()", section)
+
+    def test_biggest_bench_misses_and_single_player_rounds_are_one_row_tables(self):
+        # These used to be <ul class="plist"> lists that wrapped onto two
+        # lines once a name was long enough -- now a table, which never
+        # wraps a cell (it scrolls sideways on overflow instead).
+        self.assertIn("function rankedList(rows, cols)", HTML)
+        section = HTML[HTML.index("const benchRows ="):HTML.index('card("Biggest single-player rounds"') + 500]
+        self.assertIn("rankedList(P.missed", section)
+        self.assertIn("rankedList(P.best_rounds", section)
+        self.assertNotIn('class: "plist"', section)
 
     def test_scorer_table_is_a_single_table_so_expanded_rows_stay_aligned(self):
         # Splitting the visible/expanded rows into two separate <table>
