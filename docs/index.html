@@ -805,11 +805,11 @@ if (gws.length) {
   pg.append(h("div", { class: "grid2" },
     card("Points left on the bench", "Points scored by players who were not in the starting XI after automatic substitutions.", barList(benchRows, "bench points")),
     card("Biggest bench misses", "Most points scored by a player while on a manager's bench in one round. Finished rounds only.", missedTable)));
-  pg.append(card("Biggest single-player rounds", "Best individual scores from players in a starting XI.",
+  pg.append(card("Biggest single-player rounds", `Best individual scores from players in a starting XI.${D.live_round ? " Includes the live round in progress, which isn't final yet." : ""}`,
     rankedList(P.best_rounds.slice(0, 6), [
       { label: "Player", get: p => p.name },
       { label: "Manager", get: p => h("span", { class: "who" }, dot(byId[p.entry_id]), nameOf(byId[p.entry_id])) },
-      { label: "GW", get: p => p.gw },
+      { label: "GW", get: p => (D.live_round && p.gw === D.live_round.gw ? `${p.gw} live` : p.gw) },
       { label: "Points", get: p => p.points },
     ])));
 } else pg.append(emptyMsg("Player insights appear after the first gameweek is finished."));

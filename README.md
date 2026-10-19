@@ -73,7 +73,7 @@ This updates whenever `update.py` runs (a few times a day on the included schedu
 
 Click a manager's name to switch to their table of every player who scored a positive total while in that manager's starting XI, with columns for starts, points and average points per start — click a column header to sort by it (click again to reverse). Starts and points include the live gameweek while a round is in progress, same as the Standings total. Sorted by points by default; the top 5 show directly and the rest show under "Show N more players". A player who was traded mid-season appears under both teams, with the points they scored for each. A green "Squad" label next to a name means that player is still on the manager's squad, including the bench — not just the ones who started the round they scored in.
 
-**Biggest bench misses** and **Biggest single-player rounds** are each one row per player (name, club/manager, gameweek, points) — scrolls sideways rather than wrapping a long name onto a second line.
+**Biggest bench misses** and **Biggest single-player rounds** are each one row per player (name, club/manager, gameweek, points) — scrolls sideways rather than wrapping a long name onto a second line. **Biggest single-player rounds** also includes the live round in progress (labelled "GW_ live"), ranked alongside finished rounds, not just appended at the end — it just isn't eligible to be the season's single best round until the round finishes, same as every other finished-rounds-only record.
 
 ## All players tab
 

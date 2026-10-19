@@ -201,11 +201,6 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(rows[1]["live_points"], 20)
         self.assertEqual(rows[1]["points"], 232 + 20)
 
-    def test_best_rounds_leaderboard_stays_finished_only(self):
-        # best_rounds is a record, so -- unlike starts/points above -- it
-        # must not include an entry from the live GW5.
-        self.assertTrue(all(r["gw"] != 5 for r in self.d["players"]["best_rounds"]))
-
     def test_biggest_bench_misses(self):
         missed = self.d["players"]["missed"]
         # 14 pts for Bo in GW2 is the biggest; Dan's four 2-pt benchings follow.
@@ -546,6 +541,45 @@ class ProvisionalAutoSubTest(unittest.TestCase):
             check = d["checks"]["standings"][0]
             self.assertIsNone(check["matches"])
             self.assertFalse(d["checks"]["all_ok"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+def write_best_rounds_fixture(root):
+    """One manager, two gameweeks: GW1 finished (a modest score), GW2 live
+    (a much bigger one) for the same player -- proves the live round's
+    performance isn't just included in "best_rounds" but properly ranked
+    against finished rounds, not merely tacked on at the end."""
+    _dump(root, "game.json", {"current_event": 2, "current_event_finished": False})
+    _dump(root, "bootstrap.json", {
+        "elements": [{"id": 1, "web_name": "Star", "element_type": 4, "team": 1}],
+        "teams": [{"id": 1, "short_name": "ARS"}],
+    })
+    _dump(root, "live/gw1.json", {"elements": {"1": {"stats": {"total_points": 10, "minutes": 90}}}})
+    _dump(root, "live/gw2.json", {"elements": {"1": {"stats": {"total_points": 25, "minutes": 90}}}})
+    picks = [{"element": 1, "position": 1, "multiplier": 1, "is_captain": False, "is_vice_captain": False}]
+    _dump(root, "entries/201/gw1.json", {"picks": picks, "subs": [], "entry_history": {}})
+    _dump(root, "entries/201/gw2.json", {"picks": picks, "subs": [], "entry_history": {}})
+    _dump(root, "transactions.json", [])
+    _dump(root, "element_status.json", {"element_status": []})
+    _dump(root, "draft_choices.json", [])
+    _dump(root, "league_details.json", {
+        "league": {"id": 1, "name": "Best Rounds League"},
+        "league_entries": [{"entry_id": 201, "id": 9001, "entry_name": "Solo Team",
+                            "player_first_name": "Sam", "player_last_name": "Solo", "short_name": "SOL"}],
+        "standings": [{"league_entry": 9001, "total": 0}],
+    })
+
+
+class BestRoundsLiveTest(unittest.TestCase):
+    def test_the_live_rounds_performance_is_included_and_properly_ranked(self):
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            write_best_rounds_fixture(tmp)
+            d = build_stats.build(tmp)
+            best = d["players"]["best_rounds"]
+            self.assertEqual((best[0]["gw"], best[0]["points"]), (2, 25))
+            self.assertEqual((best[1]["gw"], best[1]["points"]), (1, 10))
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
