@@ -181,6 +181,10 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn('"aria-label": "Filter by club"', HTML)
         self.assertIn('"aria-label": "Filter by position"', HTML)
 
+    def test_live_round_tab_table_is_also_filterable_by_owner(self):
+        self.assertIn('h("div", { class: "filters" }, ownerSel, clubSel, posSel)', HTML)
+        self.assertIn('Filter by owner, club or position', HTML)
+
     def test_live_round_tab_table_shows_top_20_with_a_show_all_toggle(self):
         self.assertIn("const LIM = 20;", HTML)
         self.assertIn("showAll = !showAll; render();", HTML)

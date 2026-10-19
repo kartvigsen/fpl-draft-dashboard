@@ -866,11 +866,14 @@ pg.append(section("Live round"));
     const clubs = [...new Set(CR.all_players.map(p => p.team))].filter(Boolean).sort();
     const positions = ["GKP", "DEF", "MID", "FWD"];
     const applyFilters = () => { showAll = false; render(); };
+    const ownerOf = p => p.owner_entry_id == null ? "Free agent" : nameOf(byId[p.owner_entry_id]);
+    const ownerSel = h("select", { "aria-label": "Filter by owner", onchange: applyFilters },
+      h("option", { value: "" }, "All owners"), h("option", { value: "free" }, "Free agent"),
+      ranked.map(m => h("option", { value: m.entry_id }, nameOf(m))));
     const clubSel = h("select", { "aria-label": "Filter by club", onchange: applyFilters },
       h("option", { value: "" }, "All clubs"), clubs.map(c => h("option", { value: c }, c)));
     const posSel = h("select", { "aria-label": "Filter by position", onchange: applyFilters },
       h("option", { value: "" }, "All positions"), positions.map(p => h("option", { value: p }, p)));
-    const ownerOf = p => p.owner_entry_id == null ? "Free agent" : nameOf(byId[p.owner_entry_id]);
     const COLS = [
       { key: "name", label: "Player", num: false, get: p => p.name },
       { key: "club", label: "Club", num: false, get: p => p.team },
@@ -887,8 +890,14 @@ pg.append(section("Live round"));
     const body = h("tbody", {});
     const countNote = h("p", { class: "sub" });
     function filtered() {
-      const club = clubSel.value, pos = posSel.value;
-      return CR.all_players.filter(p => (!club || p.team === club) && (!pos || p.pos === pos));
+      const owner = ownerSel.value, club = clubSel.value, pos = posSel.value;
+      return CR.all_players.filter(p => {
+        if (owner === "free" && p.owner_entry_id != null) return false;
+        if (owner && owner !== "free" && String(p.owner_entry_id) !== owner) return false;
+        if (club && p.team !== club) return false;
+        if (pos && p.pos !== pos) return false;
+        return true;
+      });
     }
     function row(p) {
       return h("tr", {},
@@ -912,8 +921,8 @@ pg.append(section("Live round"));
       thead.textContent = ""; thead.append(sorter.row(render));
     }
     render();
-    pg.append(card("Every player, this round", "Every Premier League player's points and extra stats for the current round, highest first. Filter by club or position.",
-      h("div", { class: "filters" }, clubSel, posSel), countNote,
+    pg.append(card("Every player, this round", "Every Premier League player's points and extra stats for the current round, highest first. Filter by owner, club or position.",
+      h("div", { class: "filters" }, ownerSel, clubSel, posSel), countNote,
       h("div", { class: "tbl-wrap" }, h("table", {}, thead, body)), more));
   }
 }
