@@ -310,6 +310,122 @@ class EarlyTransactionGameweekTest(unittest.TestCase):
         self.assertEqual(self.d["transactions"]["matrix"][entry_id]["6"], 1)
 
 
+def write_live_round_fixture(root):
+    """Two managers plus a free agent, for the Live round tab:
+
+    Manager 201's squad: 1001 (GK, captain, in the XI), 1002 (DEF, vice
+    captain, in the XI), 1003 (MID, on the bench).
+    Manager 202's squad: 1004 (FWD, captain, in the XI) -- and NO gw3 picks
+    file at all, to check a manager with no lineup yet doesn't crash the
+    build.
+    1005 is a free agent (never owned), to check it still appears in the
+    round's "all_players" list with no owner.
+    """
+    _dump(root, "game.json", {"current_event": 3, "current_event_finished": False})
+    _dump(root, "bootstrap.json", {
+        "elements": [
+            {"id": 1001, "web_name": "Gio", "element_type": 1, "team": 1},
+            {"id": 1002, "web_name": "Dex", "element_type": 2, "team": 1},
+            {"id": 1003, "web_name": "Milo", "element_type": 3, "team": 1},
+            {"id": 1004, "web_name": "Fox", "element_type": 4, "team": 2},
+            {"id": 1005, "web_name": "Ray", "element_type": 4, "team": 2},
+        ],
+        "teams": [{"id": 1, "short_name": "ARS"}, {"id": 2, "short_name": "AVL"}],
+    })
+    _dump(root, "live/gw3.json", {"elements": {
+        "1001": {"stats": {"total_points": 10, "minutes": 90, "goals_scored": 0, "assists": 1,
+                            "clean_sheets": 1, "defensive_contribution": 2}},
+        "1002": {"stats": {"total_points": 5, "minutes": 90, "goals_scored": 1, "assists": 0,
+                            "clean_sheets": 0, "defensive_contribution": 0}},
+        "1003": {"stats": {"total_points": 2, "minutes": 10, "goals_scored": 0, "assists": 0,
+                            "clean_sheets": 0, "defensive_contribution": 0}},
+        "1004": {"stats": {"total_points": 8, "minutes": 90, "goals_scored": 1, "assists": 0,
+                            "clean_sheets": 0, "defensive_contribution": 0}},
+        "1005": {"stats": {"total_points": 3, "minutes": 45, "goals_scored": 0, "assists": 0,
+                            "clean_sheets": 0, "defensive_contribution": 1}},
+    }})
+    _dump(root, "entries/201/gw3.json", {"picks": [
+        {"element": 1001, "position": 1, "multiplier": 2, "is_captain": True, "is_vice_captain": False},
+        {"element": 1002, "position": 2, "multiplier": 1, "is_captain": False, "is_vice_captain": True},
+        {"element": 1003, "position": 12, "multiplier": 1, "is_captain": False, "is_vice_captain": False},
+    ], "subs": [], "entry_history": {}})
+    # No entries/202/gw3.json at all -- manager 202's lineup isn't in yet.
+    _dump(root, "element_status.json", {"element_status": [
+        {"element": 1001, "owner": 201, "status": "o"},
+        {"element": 1002, "owner": 201, "status": "o"},
+        {"element": 1003, "owner": 201, "status": "o"},
+        {"element": 1004, "owner": 202, "status": "o"},
+        {"element": 1005, "owner": None, "status": "a"},
+    ]})
+    _dump(root, "transactions.json", [])
+    _dump(root, "draft_choices.json", [])
+    _dump(root, "league_details.json", {
+        "league": {"id": 1, "name": "Live Round League"},
+        "league_entries": [
+            {"entry_id": 201, "id": 9001, "entry_name": "Solo Team",
+             "player_first_name": "Sam", "player_last_name": "Solo", "short_name": "SOL"},
+            {"entry_id": 202, "id": 9002, "entry_name": "Second Team",
+             "player_first_name": "Robin", "player_last_name": "Second", "short_name": "SEC"},
+        ],
+        "standings": [{"league_entry": 9001, "total": 0}, {"league_entry": 9002, "total": 0}],
+    })
+
+
+class LiveRoundTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        write_live_round_fixture(self.tmp)
+        self.d = build_stats.build(self.tmp)
+        self.cr = self.d["current_round"]
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def team(self, entry_id):
+        return next(t for t in self.cr["teams"] if t["entry_id"] == entry_id)
+
+    def test_gw_and_finished_flag(self):
+        self.assertEqual(self.cr["gw"], 3)
+        self.assertFalse(self.cr["finished"])
+
+    def test_xi_and_bench_split_by_squad_position(self):
+        t = self.team(201)
+        self.assertEqual([p["id"] for p in t["xi"]], [1001, 1002])
+        self.assertEqual([p["id"] for p in t["bench"]], [1003])
+
+    def test_captain_and_vice_captain_flags(self):
+        t = self.team(201)
+        gio, dex = t["xi"][0], t["xi"][1]
+        self.assertTrue(gio["is_captain"])
+        self.assertFalse(gio["is_vice_captain"])
+        self.assertTrue(dex["is_vice_captain"])
+        self.assertFalse(dex["is_captain"])
+
+    def test_points_and_extra_stats_come_from_the_live_file(self):
+        gio = self.team(201)["xi"][0]
+        self.assertEqual(gio["points"], 10)
+        self.assertEqual(gio["minutes"], 90)
+        self.assertEqual(gio["assists"], 1)
+        self.assertEqual(gio["clean_sheets"], 1)
+        self.assertEqual(gio["defensive_contribution"], 2)
+
+    def test_team_score_is_the_same_as_the_round_score(self):
+        self.assertEqual(self.team(201)["score"], self.d["rounds"][-1]["scores"]["201"])
+
+    def test_a_manager_with_no_lineup_yet_has_an_empty_squad_not_a_crash(self):
+        t = self.team(202)
+        # Manager 202 has no entries/202/gw3.json at all.
+        self.assertEqual(t["xi"], [])
+        self.assertEqual(t["bench"], [])
+
+    def test_all_players_includes_free_agents_sorted_by_points_desc(self):
+        ids = [p["id"] for p in self.cr["all_players"]]
+        self.assertEqual(ids, [1001, 1004, 1002, 1005, 1003])
+        ray = next(p for p in self.cr["all_players"] if p["id"] == 1005)
+        self.assertIsNone(ray["owner_entry_id"])
+        self.assertEqual(ray["points"], 3)
+
+
 def write_all_players_fixture(root):
     """A minimal league (no gameweeks played yet) with four Premier League
     players in different ownership/draft situations, to check the "all
@@ -374,6 +490,9 @@ class AllPlayersTest(unittest.TestCase):
 
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_no_current_round_before_any_gameweek_starts(self):
+        self.assertIsNone(self.d["current_round"])
 
     def test_every_bootstrap_player_is_included(self):
         self.assertEqual(set(self.by_id), {501, 502, 503, 504})

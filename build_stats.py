@@ -232,6 +232,54 @@ def build(raw=RAW, now=None):
         })
     all_players.sort(key=lambda r: r["name"])
 
+    # ---- live/current round breakdown (for the Live round tab) ----------
+    # Per-player points and a handful of extra stats for the latest
+    # gameweek the draft API has started (live if in progress, otherwise
+    # the last one played), plus each manager's lineup for it. Unlike
+    # "rounds"/records, this isn't finished-only -- the whole point of this
+    # tab is the round as it stands right now.
+    ROUND_STAT_KEYS = ("minutes", "goals_scored", "assists", "clean_sheets", "defensive_contribution")
+    live_cur = (_load(raw / "live" / f"gw{cur}.json", {}) or {}).get("elements", {}) if cur else {}
+
+    def round_stats(el):
+        s = (live_cur.get(str(el), {}) or {}).get("stats", {}) or {}
+        return {k: s.get(k, 0) or 0 for k in ROUND_STAT_KEYS}
+
+    def round_player(el):
+        return {**pinfo(el), "points": pp.get(cur, {}).get(el, 0),
+                "owner_entry_id": owner_by_element.get(el), **round_stats(el)}
+
+    current_round = None
+    if cur:
+        team_lineups = []
+        for eid in eids:
+            data = _load(raw / "entries" / str(eid) / f"gw{cur}.json")
+            picks = sorted((data or {}).get("picks") or [], key=lambda p: p.get("position", 99))
+            xi = [p["element"] for p in picks if p.get("position", 99) <= 11]
+            bn = [p["element"] for p in picks if p.get("position", 99) > 11]
+            for s in (data or {}).get("subs") or []:
+                out_, in_ = s.get("element_out"), s.get("element_in")
+                if out_ in xi and in_ in bn:
+                    xi[xi.index(out_)] = in_
+                    bn[bn.index(in_)] = out_
+            flags = {p["element"]: p for p in picks}
+
+            def squad_row(el, flags=flags):
+                f = flags.get(el, {})
+                return {**round_player(el), "is_captain": bool(f.get("is_captain")),
+                        "is_vice_captain": bool(f.get("is_vice_captain"))}
+
+            team_lineups.append({
+                "entry_id": eid, "score": scores[cur].get(eid),
+                "xi": [squad_row(e) for e in xi], "bench": [squad_row(e) for e in bn],
+            })
+        current_round = {
+            "gw": cur, "finished": cur_done,
+            "teams": team_lineups,
+            "all_players": sorted((round_player(p["id"]) for p in boot.get("elements", [])),
+                                   key=lambda r: (-r["points"], r["name"])),
+        }
+
     # ---- next 5 fixtures per Premier League team (for the Fixtures tab) --
     # Real-world PL fixtures/team strength, unrelated to this draft league.
     # "Favourite" compares both sides' overall strength for that specific
@@ -458,6 +506,7 @@ def build(raw=RAW, now=None):
                     "best_rounds": best_rounds[:10],
                     "bench": bench, "missed": missed[:10]},
         "all_players": all_players,
+        "current_round": current_round,
         "fixtures_by_team": fixtures_by_team,
         "checks": checks,
     }

@@ -138,6 +138,36 @@ details .tbl-wrap { margin-top: 8px; }
   display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 650;
   background: color-mix(in oklab, var(--good) 18%, var(--surface)); color: var(--good);
 }
+.teamtabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 14px; }
+.teamtab {
+  background: var(--wash); border: 1px solid var(--border); border-radius: 999px;
+  color: var(--ink-2); font: inherit; font-size: 13px; font-weight: 600;
+  padding: 7px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px;
+}
+.teamtab[aria-selected="true"] { background: var(--ink); color: var(--page); border-color: var(--ink); }
+.teamtab:hover:not([aria-selected="true"]) { background: var(--surface); }
+.pitch {
+  background: linear-gradient(180deg, #1f7a4d, #185f3d); border-radius: 14px;
+  padding: 18px 10px; display: flex; flex-direction: column; gap: 14px; margin: 10px 0;
+}
+.pitch-row { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.bench-wrap { margin-top: 4px; }
+.bench-row { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.player-chip {
+  position: relative; background: rgba(255,255,255,.96); color: #0b0b0b; border-radius: 10px;
+  padding: 7px 8px 6px; width: 92px; text-align: center; font-size: 11px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.25);
+}
+.player-chip .nm { font-weight: 700; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-chip .cl { color: #6b6a65; font-size: 10px; }
+.player-chip .pt { font-size: 16px; font-weight: 800; margin: 3px 0 1px; }
+.player-chip .st { color: #6b6a65; font-size: 9.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-chip .badge {
+  position: absolute; top: -7px; right: -6px; width: 18px; height: 18px; border-radius: 50%;
+  font-size: 10px; font-weight: 800; line-height: 18px; color: #0b0b0b;
+}
+.player-chip .badge.c { background: #eda100; }
+.player-chip .badge.vc { background: #d8d8d3; }
 .foot { margin-top: 40px; color: var(--ink-2); font-size: 12.5px; }
 .foot p { margin: 4px 0; }
 .empty { color: var(--ink-2); font-size: 13.5px; padding: 8px 0; }
@@ -451,7 +481,7 @@ if (!D.checks.all_ok) app.append(h("div", { class: "banner" }, h("strong", {}, "
   "some calculated scores do not match the site's own standings. See “Data checks” at the bottom."));
 
 /* tabs */
-const TABS = [["overview", "Overview"], ["rounds", "Rounds"], ["transactions", "Transactions"], ["players", "Players"], ["allplayers", "All players"], ["fixtures", "Fixtures"], ["feedback", "Feedback"]];
+const TABS = [["overview", "Overview"], ["rounds", "Rounds"], ["transactions", "Transactions"], ["players", "Players"], ["liveround", "Live round"], ["allplayers", "All players"], ["fixtures", "Fixtures"], ["feedback", "Feedback"]];
 const anchor = h("div");
 const tabbar = h("div", { class: "tabs", role: "tablist", "aria-label": "Dashboard sections" });
 const panels = {}, tabBtns = {};
@@ -739,6 +769,110 @@ if (gws.length) {
       h("span", {}, h("span", { class: "who" }, dot(byId[p.entry_id]), p.name), h("span", { class: "meta" }, `${nameOf(byId[p.entry_id])}, GW${p.gw}`)),
       h("span", { class: "win num" }, p.points))))));
 } else pg.append(emptyMsg("Player insights appear after the first gameweek is finished."));
+
+/* live round */
+pg = panels.liveround;
+pg.append(section("Live round"));
+{
+  const CR = D.current_round;
+  if (!CR) {
+    pg.append(emptyMsg("Appears once the first gameweek has started."));
+  } else {
+    pg.append(h("p", { class: "sub" },
+      `Gameweek ${CR.gw}${CR.finished ? " (finished)" : " (in progress)"} — updates a few times a day, not in real time.`));
+
+    const POS_ORDER = ["FWD", "MID", "DEF", "GKP"];
+    const statLine = p => {
+      const parts = [];
+      if (p.minutes) parts.push(`${p.minutes}'`);
+      if (p.goals_scored) parts.push(`${p.goals_scored}G`);
+      if (p.assists) parts.push(`${p.assists}A`);
+      if (p.clean_sheets) parts.push("CS");
+      if (p.defensive_contribution) parts.push(`${p.defensive_contribution}DC`);
+      return parts.join(" · ") || "–";
+    };
+    const chip = p => h("div", { class: "player-chip" },
+      p.is_captain ? h("span", { class: "badge c", title: "Captain" }, "C") :
+        p.is_vice_captain ? h("span", { class: "badge vc", title: "Vice-captain" }, "V") : null,
+      h("div", { class: "nm" }, p.name), h("div", { class: "cl" }, p.team),
+      h("div", { class: "pt" }, fmt(p.points)), h("div", { class: "st" }, statLine(p)));
+
+    const teamsById = Object.fromEntries(CR.teams.map(t => [t.entry_id, t]));
+    let activeEntryId = ranked[0].entry_id;
+    const pitchHost = h("div", {});
+    const tabs = ranked.map(m => h("button", { type: "button", class: "teamtab", "aria-selected": "false",
+      onclick: () => { activeEntryId = m.entry_id; paintPitch(); } }, dot(m), nameOf(m)));
+    const tabBtnByEntry = Object.fromEntries(ranked.map((m, i) => [m.entry_id, tabs[i]]));
+
+    function paintPitch() {
+      for (const m of ranked) tabBtnByEntry[m.entry_id].setAttribute("aria-selected", m.entry_id === activeEntryId ? "true" : "false");
+      const t = teamsById[activeEntryId];
+      pitchHost.textContent = "";
+      if (!t || (!t.xi.length && !t.bench.length)) {
+        pitchHost.append(emptyMsg("No lineup in yet for this manager."));
+        return;
+      }
+      const rows = POS_ORDER.map(pos => {
+        const players = t.xi.filter(p => p.pos === pos);
+        return players.length ? h("div", { class: "pitch-row" }, players.map(chip)) : null;
+      }).filter(Boolean);
+      pitchHost.append(h("div", { class: "pitch" }, rows,
+        h("p", { class: "sub", style: "color:#e7f3ec;margin:-4px 0 0" }, `Round score: ${t.score == null ? "–" : fmt(t.score)}`)));
+      if (t.bench.length) pitchHost.append(h("div", { class: "bench-wrap" },
+        h("p", { class: "sub" }, "Bench"), h("div", { class: "bench-row" }, t.bench.map(chip))));
+    }
+    paintPitch();
+    pg.append(card("Team lineups", "Captain (C) and vice-captain (V) are marked. Click a team to switch.",
+      h("div", { class: "teamtabs", role: "tablist" }, tabs), pitchHost));
+
+    const clubs = [...new Set(CR.all_players.map(p => p.team))].filter(Boolean).sort();
+    const positions = ["GKP", "DEF", "MID", "FWD"];
+    const clubSel = h("select", { "aria-label": "Filter by club", onchange: () => render() },
+      h("option", { value: "" }, "All clubs"), clubs.map(c => h("option", { value: c }, c)));
+    const posSel = h("select", { "aria-label": "Filter by position", onchange: () => render() },
+      h("option", { value: "" }, "All positions"), positions.map(p => h("option", { value: p }, p)));
+    const ownerOf = p => p.owner_entry_id == null ? "Free agent" : nameOf(byId[p.owner_entry_id]);
+    const COLS = [
+      { key: "name", label: "Player", num: false, get: p => p.name },
+      { key: "club", label: "Club", num: false, get: p => p.team },
+      { key: "owner", label: "Owner", num: false, get: ownerOf },
+      { key: "points", label: "Points", num: true, get: p => p.points },
+      { key: "minutes", label: "Min", num: true, get: p => p.minutes },
+      { key: "goals_scored", label: "Goals", num: true, get: p => p.goals_scored },
+      { key: "assists", label: "Assists", num: true, get: p => p.assists },
+      { key: "clean_sheets", label: "CS", num: true, get: p => p.clean_sheets },
+      { key: "defensive_contribution", label: "DEFCON", num: true, get: p => p.defensive_contribution },
+    ];
+    const sorter = makeSortHeader(COLS, "points", -1);
+    const thead = h("thead", {});
+    const body = h("tbody", {});
+    const countNote = h("p", { class: "sub" });
+    function filtered() {
+      const club = clubSel.value, pos = posSel.value;
+      return CR.all_players.filter(p => (!club || p.team === club) && (!pos || p.pos === pos));
+    }
+    function row(p) {
+      return h("tr", {},
+        h("td", { class: "l" }, p.name), h("td", { class: "l" }, p.team),
+        h("td", { class: "l" }, p.owner_entry_id == null ? h("span", { class: "tag-free" }, "Free agent") : ownerOf(p)),
+        h("td", { class: "num win" }, fmt(p.points)), h("td", { class: "num" }, fmt(p.minutes)),
+        h("td", { class: "num" }, fmt(p.goals_scored)), h("td", { class: "num" }, fmt(p.assists)),
+        h("td", { class: "num" }, fmt(p.clean_sheets)), h("td", { class: "num" }, fmt(p.defensive_contribution)));
+    }
+    function render() {
+      const sorted = sorter.sorted(filtered());
+      body.textContent = "";
+      if (!sorted.length) body.append(h("tr", {}, h("td", { class: "l", colspan: String(COLS.length) }, emptyMsg("No players match these filters."))));
+      else body.append(...sorted.map(row));
+      countNote.textContent = `${fmt(sorted.length)} of ${fmt(CR.all_players.length)} players shown.`;
+      thead.textContent = ""; thead.append(sorter.row(render));
+    }
+    render();
+    pg.append(card("Every player, this round", "Every Premier League player's points and extra stats for the current round, highest first. Filter by club or position.",
+      h("div", { class: "filters" }, clubSel, posSel), countNote,
+      h("div", { class: "tbl-wrap" }, h("table", {}, thead, body))));
+  }
+}
 
 /* all players */
 pg = panels.allplayers;

@@ -68,6 +68,36 @@ def _fixtures(rng, teams, start_gw=7, n_gw=7):
     return fixtures
 
 
+def _enrich_current_round(tmp, cur_gw, n_m, rng):
+    """Add captain/vice-captain picks and a few extra per-player stats to
+    the live/current gameweek's raw files, purely for a richer Live round
+    tab demo -- build_stats doesn't require any of this for earlier
+    gameweeks, and write_raw's picks default every flag to False."""
+    live_path = tmp / "live" / f"gw{cur_gw}.json"
+    live = json.loads(live_path.read_text())
+    for entry in live["elements"].values():
+        pts = entry["stats"]["total_points"]
+        goals = 1 if pts >= 6 and rng.random() < 0.5 else 0
+        entry["stats"].update({
+            "minutes": 90 if pts > 0 else rng.choice([0, 0, 45]),
+            "goals_scored": goals,
+            "assists": 1 if pts >= 3 and not goals and rng.random() < 0.4 else 0,
+            "clean_sheets": 1 if pts >= 6 and rng.random() < 0.4 else 0,
+            "defensive_contribution": rng.choice([0, 0, 1, 2]),
+        })
+    live_path.write_text(json.dumps(live))
+
+    for m in range(n_m):
+        picks_path = tmp / "entries" / str(101 + m) / f"gw{cur_gw}.json"
+        data = json.loads(picks_path.read_text())
+        xi = [p for p in data["picks"] if p["position"] <= 11]
+        if len(xi) > 1:
+            cap, vice = rng.sample(xi, 2)
+            cap["is_captain"] = True
+            vice["is_vice_captain"] = True
+        picks_path.write_text(json.dumps(data))
+
+
 def _draft_choices(n_m):
     """A snake draft over the squads: round = squad slot, "pick" resets each
     round (1..n_m), "index" is the real overall draft position."""
@@ -114,6 +144,7 @@ def main(gws=11, seed=7):
                    draft_choices=_draft_choices(n_m),
                    classic_teams=classic_teams,
                    fixtures=_fixtures(fixtures_rng, classic_teams))
+    _enrich_current_round(tmp, gws, n_m, rng)
 
     # mock.write_raw doesn't invent season-long PL stats for each player, but
     # the All players tab reads them, so add plausible ones for the demo.
