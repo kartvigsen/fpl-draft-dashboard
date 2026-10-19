@@ -16,7 +16,7 @@ python3 update.py
 
 Then open `docs/index.html` in a browser. That is the whole routine.
 
-The dashboard has seven tabs: Overview, Rounds, Transactions, Players, All players, Fixtures and Feedback. You can link straight to one, for example `index.html#rounds`.
+The dashboard has eight tabs: Overview, Rounds, Transactions, Players, Live round, All players, Fixtures and Feedback. You can link straight to one, for example `index.html#rounds`.
 
 - Run it any time, including while a gameweek is still in progress — standings and each manager's total points update live. Records and "rounds won" still only count once a gameweek finishes, since bonus points and other adjustments aren't final until then.
 - Finished gameweeks are cached in `data/raw/`, so later runs only download the newest gameweek.
@@ -62,6 +62,14 @@ If you use the included `.github/workflows/update.yml`, the dashboard rebuilds i
 ## Players tab
 
 One table per team of every player who scored a positive total while in that manager's starting XI, with columns for starts, points and average points per start — click a column header to sort by it (click again to reverse). Starts and points include the live gameweek while a round is in progress, same as the Standings total. Sorted by points by default; the top 5 show directly and the rest show under "Show N more players". A player who was traded mid-season appears under both teams, with the points they scored for each. A green "Squad" label next to a name means that player is still on the manager's squad, including the bench — not just the ones who started the round they scored in. Teams are laid out two per row.
+
+## Live round tab
+
+Everyone's lineup for the current (or just-finished) gameweek, without needing to open the official app. Click a manager's name to switch between a visual pitch view of their squad — starting XI grouped by position, bench below — with each player's points for the round and a ★-style badge for the captain (C) and vice-captain (V).
+
+Below that, every Premier League player's points and extra stats (minutes, goals, assists, clean sheets, defensive contribution) for the round, highest first — filter by club or position, or click a column to sort.
+
+This updates whenever `update.py` runs (a few times a day on the included schedule), not in real time.
 
 ## All players tab
 

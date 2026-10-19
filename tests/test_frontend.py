@@ -151,6 +151,26 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("Rounds included in the ranking", HTML)
         self.assertIn("included.filter(Boolean).length <= 1", HTML)
 
+    def test_live_round_tab_shows_a_pitch_with_captain_and_vice_captain_badges(self):
+        self.assertIn('["liveround", "Live round"]', HTML)
+        self.assertIn("D.current_round", HTML)
+        self.assertIn('class: "badge c", title: "Captain"', HTML)
+        self.assertIn('class: "badge vc", title: "Vice-captain"', HTML)
+        self.assertIn('class: "pitch"', HTML)
+
+    def test_live_round_tab_has_a_team_switcher(self):
+        self.assertIn('class: "teamtab"', HTML)
+        self.assertIn("activeEntryId = m.entry_id", HTML)
+
+    def test_live_round_tab_table_is_sortable_and_filterable_by_club_and_position(self):
+        self.assertIn('makeSortHeader(COLS, "points", -1)', HTML)
+        self.assertIn('{ key: "defensive_contribution", label: "DEFCON"', HTML)
+        self.assertIn('"aria-label": "Filter by club"', HTML)
+        self.assertIn('"aria-label": "Filter by position"', HTML)
+
+    def test_live_round_tab_handles_no_round_yet(self):
+        self.assertIn("Appears once the first gameweek has started.", HTML)
+
     def test_scorer_table_is_sortable_by_name_starts_points_and_avg(self):
         self.assertIn('key: "name"', HTML)
         self.assertIn('key: "starts"', HTML)
@@ -178,7 +198,8 @@ class FrontendMarkupTest(unittest.TestCase):
     def test_all_players_tab_is_between_players_and_feedback(self):
         tabs_line = re.search(r'const TABS = \[.*?\];', HTML).group(0)
         order = [k for k in re.findall(r'\["(\w+)",', tabs_line)]
-        self.assertEqual(order.index("allplayers"), order.index("players") + 1)
+        self.assertEqual(order.index("liveround"), order.index("players") + 1)
+        self.assertEqual(order.index("allplayers"), order.index("liveround") + 1)
         self.assertEqual(order.index("fixtures"), order.index("allplayers") + 1)
         self.assertEqual(order.index("feedback"), order.index("fixtures") + 1)
 
