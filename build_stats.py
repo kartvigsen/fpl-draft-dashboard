@@ -498,9 +498,18 @@ def build(raw=RAW, now=None):
             continue
         through_cur = sum(scores[g].get(m["entry_id"]) or 0 for g in all_gws)
         through_fin = sum(scores[g].get(m["entry_id"]) or 0 for g in fin_gws)
-        matches = ("through_current" if through_cur == s.get("total")
-                   else "through_finished" if through_fin == s.get("total") else None)
         ev_total = s.get("event_total")
+        # While a round is live, our own total already applies a provisional
+        # substitution the site hasn't computed yet (see collect/build notes
+        # on automatic subs), so it can legitimately differ from the site's
+        # own live total. That's not a real mismatch: it still agrees once
+        # you swap in the site's own (unsubbed) live figure for that round.
+        live_unsubbed_total = through_fin + (ev_total or 0) if (cur and not cur_done) else None
+        matches = ("through_current" if through_cur == s.get("total")
+                   else "through_finished" if through_fin == s.get("total")
+                   else "through_finished_plus_live_unsubbed"
+                   if live_unsubbed_total is not None and live_unsubbed_total == s.get("total")
+                   else None)
         standing_checks.append({
             "entry_id": m["entry_id"], "site_total": s.get("total"),
             "computed_through_current": through_cur,

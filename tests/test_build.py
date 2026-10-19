@@ -513,6 +513,42 @@ class ProvisionalAutoSubTest(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_the_sites_own_unsubbed_live_total_is_not_flagged_as_a_mismatch(self):
+        # The site's own "total" reflects the raw (unsubbed) live score
+        # (12) -- it hasn't caught up with our own, correctly-subbed one
+        # (21) yet. That's expected while the round is live, not a real
+        # problem, so "Data checks" should still pass.
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            write_auto_sub_fixture(tmp)
+            league_path = tmp / "league_details.json"
+            data = json.loads(league_path.read_text())
+            data["standings"][0]["total"] = 12
+            data["standings"][0]["event_total"] = 12
+            league_path.write_text(json.dumps(data))
+            d = build_stats.build(tmp)
+            check = d["checks"]["standings"][0]
+            self.assertEqual(check["matches"], "through_finished_plus_live_unsubbed")
+            self.assertTrue(d["checks"]["all_ok"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_a_genuine_standings_mismatch_is_still_flagged(self):
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            write_auto_sub_fixture(tmp)
+            league_path = tmp / "league_details.json"
+            data = json.loads(league_path.read_text())
+            data["standings"][0]["total"] = 999  # agrees with no formula
+            data["standings"][0]["event_total"] = 5
+            league_path.write_text(json.dumps(data))
+            d = build_stats.build(tmp)
+            check = d["checks"]["standings"][0]
+            self.assertIsNone(check["matches"])
+            self.assertFalse(d["checks"]["all_ok"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
 
 class LiveRoundTest(unittest.TestCase):
     def setUp(self):
