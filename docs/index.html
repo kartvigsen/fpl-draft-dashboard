@@ -582,11 +582,21 @@ else {
     if (!hiI || v > series[hiI.si].values[hiI.i]) hiI = { si, i };
     if (!loI || v < series[loI.si].values[loI.i]) loI = { si, i };
   }));
+  // The live round's score is already provisional (same figure shown on the
+  // Standings table and the "live" row below); add it as one more point so
+  // the chart isn't stuck a round behind, without making it eligible for
+  // the highest/lowest-round labels above (finished rounds only, per the
+  // hiI/loI computed before this point is appended).
+  const chartGws = D.live_round ? [...gws, D.live_round.gw] : gws;
+  const valuesByEntry = Object.fromEntries(series.map(s => [s.m.entry_id,
+    D.live_round ? [...s.values, D.live_round.scores[s.m.entry_id] ?? 0] : s.values]));
+  const chartSeries = M.map(m => ({ m, values: valuesByEntry[m.entry_id] }));
+  const roundRowLabel = (g, i) => (D.live_round && i === chartGws.length - 1 ? `GW${g} live` : `GW${g}`);
   const host1 = h("div", { class: "chart" });
-  pg.append(card("Points per round", "Highest and lowest round are labelled. Hover or use the arrow keys to read every round.",
+  pg.append(card("Points per round", `Highest and lowest round are labelled (finished rounds only).${D.live_round ? " The live round in progress is also shown." : ""} Hover or use the arrow keys to read every round.`,
     legend(M), host1,
-    tableView(["GW", ...M.map(nameOf)], finishedRounds.map(r => [`GW${r.gw}`, ...M.map(m => r.scores[m.entry_id])]))));
-  lineChart(host1, { xs: gws, series, label: "Points per round for each manager",
+    tableView(["GW", ...M.map(nameOf)], chartGws.map((g, i) => [roundRowLabel(g, i), ...M.map(m => valuesByEntry[m.entry_id][i])]))));
+  lineChart(host1, { xs: chartGws, series: chartSeries, label: "Points per round for each manager",
     labels: [{ ...hiI }, { ...loI, below: true }] });
 
   const allRoundVals = finishedRounds.flatMap(r => M.map(m => r.scores[m.entry_id]).filter(v => v != null));
