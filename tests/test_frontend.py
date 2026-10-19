@@ -218,6 +218,11 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("allRoundVals", HTML)
         self.assertIn("const allLo = Math.min(...allRoundVals), allHi = Math.max(...allRoundVals);", HTML)
 
+    def test_points_per_round_chart_extends_to_the_live_round(self):
+        self.assertIn("const chartGws = D.live_round ? [...gws, D.live_round.gw] : gws;", HTML)
+        self.assertIn("D.live_round.scores[s.m.entry_id] ?? 0", HTML)
+        self.assertIn("xs: chartGws, series: chartSeries", HTML)
+
     def test_tab_order_matches_the_requested_layout(self):
         tabs_line = re.search(r'const TABS = \[.*?\];', HTML).group(0)
         order = [k for k in re.findall(r'\["(\w+)",', tabs_line)]

@@ -52,6 +52,7 @@ If you use the included `.github/workflows/update.yml`, the dashboard rebuilds i
 
 ## Rounds tab
 
+- **Points per round** extends one point further than the last finished gameweek while a round is live, labelled "GW_ live" — the highest/lowest round labels on the chart still only ever point at a finished round, same as the Records table.
 - **Every round** shades each score from red through orange and yellow to green, on the same scale across every round and manager (not reset per row), so a shade means the same thing anywhere in the table — on top of the existing ▲/▼ markers for the top and lowest score of each round.
 - The **Records** table no longer shows "Closest round" (everything else — highest/lowest round, biggest winning margin, longest winning streak — is unchanged).
 
