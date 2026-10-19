@@ -861,11 +861,14 @@ pg.append(section("Live round"));
     pg.append(card("Team lineups", "Captain (C) and vice-captain (V) are marked. Click a team to switch, or a player for their full stats.",
       h("div", { class: "teamtabs", role: "tablist" }, tabs), pitchHost), modalBackdrop);
 
+    const LIM = 20;
+    let showAll = false;
     const clubs = [...new Set(CR.all_players.map(p => p.team))].filter(Boolean).sort();
     const positions = ["GKP", "DEF", "MID", "FWD"];
-    const clubSel = h("select", { "aria-label": "Filter by club", onchange: () => render() },
+    const applyFilters = () => { showAll = false; render(); };
+    const clubSel = h("select", { "aria-label": "Filter by club", onchange: applyFilters },
       h("option", { value: "" }, "All clubs"), clubs.map(c => h("option", { value: c }, c)));
-    const posSel = h("select", { "aria-label": "Filter by position", onchange: () => render() },
+    const posSel = h("select", { "aria-label": "Filter by position", onchange: applyFilters },
       h("option", { value: "" }, "All positions"), positions.map(p => h("option", { value: p }, p)));
     const ownerOf = p => p.owner_entry_id == null ? "Free agent" : nameOf(byId[p.owner_entry_id]);
     const COLS = [
@@ -895,18 +898,23 @@ pg.append(section("Live round"));
         h("td", { class: "num" }, fmt(p.goals_scored)), h("td", { class: "num" }, fmt(p.assists)),
         h("td", { class: "num" }, fmt(p.clean_sheets)), h("td", { class: "num" }, fmt(p.defensive_contribution)));
     }
+    const more = h("button", { class: "ghost", type: "button", style: "margin-top:10px",
+      onclick: () => { showAll = !showAll; render(); } });
     function render() {
       const sorted = sorter.sorted(filtered());
+      const shown = showAll ? sorted : sorted.slice(0, LIM);
       body.textContent = "";
-      if (!sorted.length) body.append(h("tr", {}, h("td", { class: "l", colspan: String(COLS.length) }, emptyMsg("No players match these filters."))));
-      else body.append(...sorted.map(row));
-      countNote.textContent = `${fmt(sorted.length)} of ${fmt(CR.all_players.length)} players shown.`;
+      if (!shown.length) body.append(h("tr", {}, h("td", { class: "l", colspan: String(COLS.length) }, emptyMsg("No players match these filters."))));
+      else body.append(...shown.map(row));
+      countNote.textContent = `${fmt(shown.length)} of ${fmt(sorted.length)} players shown.`;
+      more.hidden = sorted.length <= LIM;
+      more.textContent = showAll ? "Show fewer" : `Show all ${sorted.length}`;
       thead.textContent = ""; thead.append(sorter.row(render));
     }
     render();
     pg.append(card("Every player, this round", "Every Premier League player's points and extra stats for the current round, highest first. Filter by club or position.",
       h("div", { class: "filters" }, clubSel, posSel), countNote,
-      h("div", { class: "tbl-wrap" }, h("table", {}, thead, body))));
+      h("div", { class: "tbl-wrap" }, h("table", {}, thead, body)), more));
   }
 }
 
