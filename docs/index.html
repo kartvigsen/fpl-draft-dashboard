@@ -613,13 +613,22 @@ else {
   pg = panels.overview;
   pg.append(section("Trends"));
   const cumHost = h("div", { class: "chart" }), rankHost = h("div", { class: "chart" });
+  // The live round's total/rank already fold in its provisional score (same
+  // figures as the Standings table), so these two charts can show it as one
+  // more point without any new backend data.
+  const trendGws = D.live_round ? [...gws, D.live_round.gw] : gws;
+  const cumByEntry = Object.fromEntries(M.map(m => [m.entry_id,
+    D.live_round ? [...D.trends.cumulative[m.entry_id], PM[m.entry_id].total] : D.trends.cumulative[m.entry_id]]));
+  const rankByEntry = Object.fromEntries(M.map(m => [m.entry_id,
+    D.live_round ? [...D.trends.rank[m.entry_id], PM[m.entry_id].rank] : D.trends.rank[m.entry_id]]));
+  const trendRowLabel = (g, i) => (D.live_round && i === trendGws.length - 1 ? `GW${g} live` : `GW${g}`);
   pg.append(h("div", { class: "grid2" },
-    card("Total points", "Running total after each finished round.", legend(M), cumHost,
-      tableView(["GW", ...M.map(nameOf)], gws.map((g, i) => [`GW${g}`, ...M.map(m => D.trends.cumulative[m.entry_id][i])]))),
-    card("Position in the league", "Rank after each finished round. Tied managers share a rank.", legend(M), rankHost,
-      tableView(["GW", ...M.map(nameOf)], gws.map((g, i) => [`GW${g}`, ...M.map(m => "#" + D.trends.rank[m.entry_id][i])])))));
-  lineChart(cumHost, { xs: gws, series: M.map(m => ({ m, values: D.trends.cumulative[m.entry_id] })), label: "Running total points", height: 260 });
-  lineChart(rankHost, { xs: gws, series: M.map(m => ({ m, values: D.trends.rank[m.entry_id] })), rank: M.length, label: "League position after each round", height: 260 });
+    card("Total points", `Running total after each finished round${D.live_round ? ", plus the live round in progress" : ""}.`, legend(M), cumHost,
+      tableView(["GW", ...M.map(nameOf)], trendGws.map((g, i) => [trendRowLabel(g, i), ...M.map(m => cumByEntry[m.entry_id][i])]))),
+    card("Position in the league", `Rank after each finished round${D.live_round ? ", plus the live round in progress" : ""}. Tied managers share a rank.`, legend(M), rankHost,
+      tableView(["GW", ...M.map(nameOf)], trendGws.map((g, i) => [trendRowLabel(g, i), ...M.map(m => "#" + rankByEntry[m.entry_id][i])])))));
+  lineChart(cumHost, { xs: trendGws, series: M.map(m => ({ m, values: cumByEntry[m.entry_id] })), label: "Running total points", height: 260 });
+  lineChart(rankHost, { xs: trendGws, series: M.map(m => ({ m, values: rankByEntry[m.entry_id] })), rank: M.length, label: "League position after each round", height: 260 });
 
   /* rounds won + records */
   pg = panels.rounds;

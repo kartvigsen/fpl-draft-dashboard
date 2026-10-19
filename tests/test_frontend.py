@@ -279,6 +279,12 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("toggleTheme", header)
         self.assertEqual(header.count('h("button"'), 1)
 
+    def test_trends_charts_extend_to_the_live_round(self):
+        self.assertIn("const trendGws = D.live_round ? [...gws, D.live_round.gw] : gws;", HTML)
+        self.assertIn("PM[m.entry_id].total", HTML)
+        self.assertIn("PM[m.entry_id].rank", HTML)
+        self.assertIn("`GW${g} live`", HTML)
+
 
 if __name__ == "__main__":
     unittest.main()

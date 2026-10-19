@@ -44,7 +44,7 @@ If you use the included `.github/workflows/update.yml`, the dashboard rebuilds i
 
 ## Rules used
 
-- **Standings and total points:** update live while a gameweek is in progress, using that round's provisional score. The Standings table marks a live contribution with a small "(+N live)" next to a manager's points, and a note explains it while a round is in progress.
+- **Standings and total points:** update live while a gameweek is in progress, using that round's provisional score. The Standings table marks a live contribution with a small "(+N live)" next to a manager's points, and a note explains it while a round is in progress. The Overview tab's "Total points" and "Position in the league" charts extend one point further to show the live round too, labelled "GW_ live".
 - **Automatic substitutions, live:** the official site only fills in a round's real substitutions once it's finished, so a provisional score (while a round is still live) applies the same rule itself: a starting player with 0 minutes is covered by the next bench player (in bench order) who actually played — a goalkeeper only ever by the bench goalkeeper. Once the round finishes, the official figure is used instead, which can differ slightly if the real substitution rule's formation constraints kick in (not modelled here). Until then, this can make the live total differ from the one shown on the official site — that's expected, not a bug, and "Data checks" will say so.
 - **Rounds won:** the top score among all managers in a gameweek. A tie counts as a win for each tied manager. Only finished gameweeks are eligible — a live round can't be "won" until bonus points and the rest are final.
 - **Transactions:** accepted moves only. Denied bids are shown separately.
