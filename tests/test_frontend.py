@@ -158,6 +158,19 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn('class: "badge vc", title: "Vice-captain"', HTML)
         self.assertIn('class: "pitch"', HTML)
 
+    def test_live_round_pitch_is_ordered_keeper_first_and_rows_never_wrap(self):
+        self.assertIn('const POS_ORDER = ["GKP", "DEF", "MID", "FWD"];', HTML)
+        self.assertIn(".pitch-row { display: flex; justify-content: center; align-items: flex-start; gap: 4px; flex-wrap: nowrap; }", HTML)
+        self.assertIn("flex: 0 1 19%", HTML)
+
+    def test_live_round_player_chip_opens_a_modal_with_full_stats(self):
+        self.assertIn('class: "player-chip", onclick: () => openPlayerModal(p)', HTML)
+        self.assertIn("function openPlayerModal(p)", HTML)
+        self.assertIn('class: "modal-backdrop"', HTML)
+        self.assertIn('statRow("Minutes"', HTML)
+        self.assertIn('statRow("Defensive contribution"', HTML)
+        self.assertIn('ev.key === "Escape"', HTML)
+
     def test_live_round_tab_has_a_team_switcher(self):
         self.assertIn('class: "teamtab"', HTML)
         self.assertIn("activeEntryId = m.entry_id", HTML)
