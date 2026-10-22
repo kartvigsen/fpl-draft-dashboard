@@ -57,6 +57,41 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("no-repeat local", HTML)
         self.assertIn("no-repeat scroll", HTML)
 
+
+class HomeScreenInstallTest(unittest.TestCase):
+    """"Add to Home Screen" support: a web app manifest, icons, and a
+    minimal service worker so the dashboard installs like an app."""
+
+    def test_manifest_and_icons_are_linked_in_the_head(self):
+        self.assertIn('<link rel="manifest" href="manifest.json">', HTML)
+        self.assertIn('<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">', HTML)
+        self.assertIn('<link rel="icon" href="icons/favicon.ico" sizes="any">', HTML)
+        self.assertIn('<meta name="theme-color" content="#2a78d6">', HTML)
+        self.assertIn('<meta name="apple-mobile-web-app-capable" content="yes">', HTML)
+
+    def test_service_worker_is_registered(self):
+        self.assertIn('navigator.serviceWorker.register("sw.js")', HTML)
+
+    def test_manifest_json_is_valid_and_matches_the_linked_icons(self):
+        import json
+        manifest = json.loads((ROOT / "docs" / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["display"], "standalone")
+        icon_srcs = {icon["src"] for icon in manifest["icons"]}
+        self.assertEqual(icon_srcs, {
+            "icons/icon-192.png", "icons/icon-512.png",
+            "icons/icon-192-maskable.png", "icons/icon-512-maskable.png",
+        })
+        for src in icon_srcs:
+            self.assertTrue((ROOT / "docs" / src).exists(), f"missing {src}")
+
+    def test_favicon_and_apple_touch_icon_files_exist(self):
+        self.assertTrue((ROOT / "docs" / "icons" / "favicon.ico").exists())
+        self.assertTrue((ROOT / "docs" / "icons" / "apple-touch-icon.png").exists())
+
+    def test_service_worker_file_exists_and_handles_fetch(self):
+        sw = (ROOT / "docs" / "sw.js").read_text(encoding="utf-8")
+        self.assertIn('addEventListener("fetch"', sw)
+
     def test_all_moves_has_filters_for_team_type_result_gw_and_name(self):
         self.assertIn('"Filter by team"', HTML)
         self.assertIn('"Filter by type"', HTML)
@@ -243,7 +278,7 @@ class FrontendMarkupTest(unittest.TestCase):
     def test_tab_order_matches_the_requested_layout(self):
         tabs_line = re.search(r'const TABS = \[.*?\];', HTML).group(0)
         order = [k for k in re.findall(r'\["(\w+)",', tabs_line)]
-        self.assertEqual(order, ["overview", "liveround", "rounds", "players", "transactions", "fixtures", "allplayers"])
+        self.assertEqual(order, ["overview", "liveround", "rounds", "players", "transactions", "fixtures", "allplayers", "justice", "streaks", "awards", "h2h"])
 
     def test_players_tab_is_labeled_team_info(self):
         self.assertIn('["players", "Team info"]', HTML)
@@ -310,6 +345,89 @@ class FrontendMarkupTest(unittest.TestCase):
     def test_data_checks_explains_an_unsubbed_live_total_instead_of_flagging_it(self):
         self.assertIn('"through_finished_plus_live_unsubbed"', HTML)
         self.assertIn("site's live round isn't subbed yet", HTML)
+
+    def test_table_of_justice_tab_ranks_by_deserved_total_and_labels_the_gap(self):
+        panel = HTML[HTML.index("/* table of justice */"):HTML.index("/* streaks & badges */")]
+        self.assertIn("D.justice.map(", panel)
+        self.assertIn("j.deserved_total", panel)
+        self.assertIn("j.actual_rank", panel)
+        self.assertIn("`Robbed by ${j.luck_delta}`", panel)
+        self.assertIn("`Blessed by ${-j.luck_delta}`", panel)
+        self.assertIn('"Spot on"', panel)
+
+    def test_table_of_justice_handles_no_finished_gameweeks_yet(self):
+        panel = HTML[HTML.index("/* table of justice */"):HTML.index("/* streaks & badges */")]
+        self.assertIn("if (!gws.length) pg.append(emptyMsg(", panel)
+
+    def test_streaks_tab_switches_between_managers_like_team_info(self):
+        panel = HTML[HTML.index("/* streaks & badges */"):HTML.index("/* weekly awards */")]
+        self.assertIn('class: "teamtab"', panel)
+        self.assertIn("activeEntryId = m.entry_id; paintStreaks();", panel)
+
+    def test_streaks_tab_shows_current_and_best_for_each_streak_type(self):
+        panel = HTML[HTML.index("/* streaks & badges */"):HTML.index("/* weekly awards */")]
+        self.assertIn("s.win[activeEntryId].current", panel)
+        self.assertIn("s.win[activeEntryId].best", panel)
+        self.assertIn("s.top2[activeEntryId].current", panel)
+        self.assertIn("s.cold[activeEntryId].best", panel)
+
+    def test_streaks_tab_badges_account_for_ties(self):
+        # Every badge is awarded to every manager tied for the lead, not
+        # just the first one found.
+        panel = HTML[HTML.index("/* streaks & badges */"):HTML.index("/* weekly awards */")]
+        self.assertIn("function leadersBy(fn) {", panel)
+        self.assertIn("M.filter(m => fn(PM[m.entry_id]) === best).map(m => m.entry_id)", panel)
+
+    def test_streaks_tab_handles_no_finished_gameweeks_yet(self):
+        panel = HTML[HTML.index("/* streaks & badges */"):HTML.index("/* weekly awards */")]
+        self.assertIn("if (!gws.length) pg.append(emptyMsg(", panel)
+
+    def test_weekly_awards_has_no_captain_based_category(self):
+        panel = HTML[HTML.index("/* weekly awards */"):HTML.index("/* head to head */")]
+        self.assertIn("No captain-based awards", panel)  # the explanatory subtitle
+        for needle in ("is_captain", "is_vice_captain", "vice-captain", "Captain of the week"):
+            self.assertNotIn(needle, panel)
+
+    def test_weekly_awards_steps_through_gameweeks_defaulting_to_latest(self):
+        panel = HTML[HTML.index("/* weekly awards */"):HTML.index("/* head to head */")]
+        self.assertIn("let awardIdx = D.weekly_awards.length - 1;", panel)
+        self.assertIn("awardIdx--; paintAwards();", panel)
+        self.assertIn("awardIdx++; paintAwards();", panel)
+        self.assertIn("prevBtn.disabled = awardIdx === 0;", panel)
+        self.assertIn("nextBtn.disabled = awardIdx === D.weekly_awards.length - 1;", panel)
+
+    def test_weekly_awards_skips_climber_faller_when_absent(self):
+        panel = HTML[HTML.index("/* weekly awards */"):HTML.index("/* head to head */")]
+        self.assertIn("if (!a) continue;", panel)
+
+    def test_weekly_awards_handles_no_finished_gameweeks_yet(self):
+        panel = HTML[HTML.index("/* weekly awards */"):HTML.index("/* head to head */")]
+        self.assertIn("if (!D.weekly_awards.length) pg.append(emptyMsg(", panel)
+
+    def test_h2h_tab_defaults_to_the_top_two_ranked_managers(self):
+        panel = HTML[HTML.index("/* head to head */"):HTML.index("/* players */")]
+        self.assertIn("selA.value = ranked[0].entry_id;", panel)
+        self.assertIn("selB.value = ranked[1].entry_id;", panel)
+
+    def test_h2h_tab_guards_against_picking_the_same_manager_twice(self):
+        panel = HTML[HTML.index("/* head to head */"):HTML.index("/* players */")]
+        self.assertIn("if (a === b) {", panel)
+
+    def test_h2h_record_counts_finished_rounds_only_chart_extends_to_live(self):
+        panel = HTML[HTML.index("/* head to head */"):HTML.index("/* players */")]
+        self.assertIn("for (const r of finishedRounds) {", panel)
+        self.assertIn("if (D.live_round) {", panel)
+        self.assertIn("chartGws = [...gws, D.live_round.gw];", panel)
+
+    def test_h2h_chart_reuses_the_shared_line_chart_component(self):
+        panel = HTML[HTML.index("/* head to head */"):HTML.index("/* players */")]
+        self.assertIn("lineChart(host1,", panel)
+
+    def test_h2h_season_totals_compare_points_bench_and_moves(self):
+        panel = HTML[HTML.index("/* head to head */"):HTML.index("/* players */")]
+        self.assertIn('metricBars("Total points", "pts", a, b, p => p.total)', panel)
+        self.assertIn('metricBars("Bench points", "pts", a, b, p => p.bench_points)', panel)
+        self.assertIn('metricBars("Moves made", "moves", a, b, p => p.tx_accepted)', panel)
 
 
 if __name__ == "__main__":

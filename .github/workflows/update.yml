@@ -30,9 +30,8 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
     steps:
       - name: Check Danish local time
         id: gate
@@ -74,6 +73,23 @@ jobs:
             git push
           fi
 
+      - name: Send the weekly digest, if a new gameweek just finished
+        if: steps.gate.outputs.run == 'true'
+        continue-on-error: true   # a digest/email hiccup must never block the dashboard update or deploy above
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          DIGEST_RECIPIENTS: ${{ secrets.DIGEST_RECIPIENTS }}
+        run: |
+          python3 send_digest.py
+          if [ -f .digest_state.json ]; then
+            git add .digest_state.json
+            if ! git diff --cached --quiet -- .digest_state.json; then
+              git commit -m "Record digest sent for this gameweek"
+              git push
+            fi
+          fi
+
       - uses: actions/configure-pages@v5
         if: steps.gate.outputs.run == 'true'
 
@@ -82,6 +98,17 @@ jobs:
         with:
           path: docs
 
+  # A separate job so the github-pages environment's branch protection
+  # (publish from main only) gates just this deploy step, not the whole
+  # job above -- the data rebuild and digest send can still be run and
+  # tested (e.g. via "Run workflow") from any branch.
+  deploy:
+    needs: update
+    if: needs.update.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
-        if: steps.gate.outputs.run == 'true'
         uses: actions/deploy-pages@v4

@@ -428,6 +428,84 @@ def build(raw=RAW, now=None):
         records["longest_win_streak"] = best_streak
         records["ties_for_win"] = sum(1 for r in rounds if len(r["winners"]) > 1)
 
+    # ---- table of justice ------------------------------------------------
+    # Standings re-ranked by total points including bench points, i.e. what
+    # the table would look like if every point a squad actually scored
+    # counted -- not just the starting XI. luck_delta is actual_rank minus
+    # this "deserved" rank: positive means ranked worse than deserved
+    # (robbed), negative means ranked better (blessed).
+    justice = sorted(
+        ({"entry_id": e, "actual_rank": per_manager[str(e)]["rank"],
+          "actual_total": per_manager[str(e)]["total"],
+          "bench_points": per_manager[str(e)]["bench_points"],
+          "deserved_total": per_manager[str(e)]["total"] + per_manager[str(e)]["bench_points"]}
+         for e in eids),
+        key=lambda j: -j["deserved_total"])
+    for i, j in enumerate(justice):
+        j["deserved_rank"] = i + 1
+        j["luck_delta"] = j["actual_rank"] - j["deserved_rank"]
+
+    # ---- streaks & milestones --------------------------------------------
+    n_managers = len(eids)
+    win_streaks = {e: {"current": 0, "best": 0} for e in eids}
+    top2_streaks = {e: {"current": 0, "best": 0} for e in eids}
+    cold_streaks = {e: {"current": 0, "best": 0} for e in eids}
+    for gw in complete:
+        round_rank = _rank_desc(scores[gw])
+        for e in eids:
+            for streaks, hit in ((win_streaks, round_rank[e] == 1),
+                                  (top2_streaks, round_rank[e] <= 2),
+                                  (cold_streaks, round_rank[e] == n_managers)):
+                streaks[e]["current"] = streaks[e]["current"] + 1 if hit else 0
+                streaks[e]["best"] = max(streaks[e]["best"], streaks[e]["current"])
+    streaks = {"win": {str(e): win_streaks[e] for e in eids},
+               "top2": {str(e): top2_streaks[e] for e in eids},
+               "cold": {str(e): cold_streaks[e] for e in eids}}
+
+    # Every 100-point threshold crossed so far, and the gameweek it happened.
+    max_total = max((cum[e][-1] for e in eids if cum[e]), default=0)
+    thresholds = range(100, max_total + 1, 100)
+    milestones = {}
+    for e in eids:
+        reached = []
+        for t in thresholds:
+            gw_hit = next((complete[i] for i, v in enumerate(cum[e]) if v >= t), None)
+            if gw_hit is not None:
+                reached.append({"threshold": t, "gw": gw_hit})
+        milestones[str(e)] = reached
+
+    # ---- weekly awards ----------------------------------------------------
+    # Five trophies per finished gameweek: top scorer, wooden spoon, bench
+    # flop, and the biggest rank climb/fall from the previous finished
+    # gameweek (the first gameweek has no climber/faller to compare
+    # against). Nothing captain-based -- this league doesn't use them.
+    weekly_awards = []
+    prev_round_rank = None
+    for gw in complete:
+        round_rank = _rank_desc(scores[gw])
+        top = max(eids, key=lambda e: scores[gw][e])
+        bottom = min(eids, key=lambda e: scores[gw][e])
+        bench_this = {e: bench_pts[e].get(gw, 0) for e in eids}
+        flop = max(eids, key=lambda e: bench_this[e])
+        climber = faller = None
+        if prev_round_rank is not None:
+            deltas = {e: prev_round_rank[e] - round_rank[e] for e in eids}  # positive = moved up
+            best_e = max(eids, key=lambda e: deltas[e])
+            worst_e = min(eids, key=lambda e: deltas[e])
+            if deltas[best_e] > 0:
+                climber = {"entry_id": best_e, "delta": deltas[best_e]}
+            if deltas[worst_e] < 0:
+                faller = {"entry_id": worst_e, "delta": -deltas[worst_e]}
+        weekly_awards.append({
+            "gw": gw,
+            "top_scorer": {"entry_id": top, "points": scores[gw][top]},
+            "wooden_spoon": {"entry_id": bottom, "points": scores[gw][bottom]},
+            "bench_flop": {"entry_id": flop, "points": bench_this[flop]},
+            "climber": climber,
+            "faller": faller,
+        })
+        prev_round_rank = round_rank
+
     # ---- transactions ---------------------------------------------------
     tx_matrix = {str(e): {str(gw): 0 for gw in all_gws} for e in eids}
     for t in accepted:
@@ -549,6 +627,10 @@ def build(raw=RAW, now=None):
                    "cumulative": {str(e): cum[e] for e in eids},
                    "rank": {str(e): rank_by_gw[e] for e in eids}},
         "records": records,
+        "justice": justice,
+        "streaks": streaks,
+        "milestones": milestones,
+        "weekly_awards": weekly_awards,
         "transactions": {"matrix": tx_matrix, "moves": moves},
         "players": {"scorers_by_manager": scorers_by_manager,
                     "best_rounds": best_rounds[:10],

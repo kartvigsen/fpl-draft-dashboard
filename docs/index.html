@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FPL Draft Dashboard</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#2a78d6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Draft Dash">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
 :root {
   color-scheme: light;
@@ -137,6 +144,18 @@ details .tbl-wrap { margin-top: 8px; }
   display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 650;
   background: color-mix(in oklab, var(--good) 18%, var(--surface)); color: var(--good);
 }
+.badge {
+  display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+  background: var(--wash); color: var(--ink-2);
+}
+.award { display: flex; align-items: center; gap: 12px; }
+.award .ic { font-size: 22px; flex: none; width: 32px; text-align: center; }
+.award .meta { flex: 1; min-width: 0; }
+.award .label { color: var(--ink-2); font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .03em; margin: 0; }
+.award .who { margin: 3px 0 0; font-weight: 650; }
+.award .value { text-align: right; flex: none; }
+.award .value .n { font-size: 18px; font-weight: 650; }
+.award .value .note { color: var(--ink-2); font-size: 11px; }
 .teamtabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 14px; }
 .teamtab {
   background: var(--wash); border: 1px solid var(--border); border-radius: 999px;
@@ -481,7 +500,7 @@ if (!D.checks.all_ok) app.append(h("div", { class: "banner" }, h("strong", {}, "
   "some calculated scores do not match the site's own standings. See “Data checks” at the bottom."));
 
 /* tabs */
-const TABS = [["overview", "Overview"], ["liveround", "Live round"], ["rounds", "Rounds"], ["players", "Team info"], ["transactions", "Transactions"], ["fixtures", "Fixtures"], ["allplayers", "All players"]];
+const TABS = [["overview", "Overview"], ["liveround", "Live round"], ["rounds", "Rounds"], ["players", "Team info"], ["transactions", "Transactions"], ["fixtures", "Fixtures"], ["allplayers", "All players"], ["justice", "Table of justice"], ["streaks", "Streaks & badges"], ["awards", "Weekly awards"], ["h2h", "Head-to-head"]];
 const anchor = h("div");
 const tabbar = h("div", { class: "tabs", role: "tablist", "aria-label": "Dashboard sections" });
 const panels = {}, tabBtns = {};
@@ -729,6 +748,211 @@ pg = panels.transactions;
     h("div", { class: "filters" }, teamSel, typeSel, resultSel, gwSel, nameInput),
     h("div", { class: "tbl-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["GW", "Team", "Type", "Result", "In", "Out"].map((x, i) =>
       h("th", { class: i < 6 ? "l" : "" }, x)))), body)), more));
+}
+
+/* table of justice */
+pg = panels.justice;
+pg.append(section("Table of justice"));
+pg.append(h("p", { class: "sub" },
+  "The real table, if bench points had counted all season — ranked by total points your squad actually scored, starters and bench alike. The result shows how far that is from where you actually sit."));
+if (!gws.length) pg.append(emptyMsg("Shows up once the first gameweek finishes."));
+else {
+  const ord = n => (n % 100 >= 11 && n % 100 <= 13) ? `${n}th` : `${n}${{ 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th"}`;
+  const rows = D.justice.map(j => {
+    const m = byId[j.entry_id];
+    const label = j.luck_delta > 0 ? `Robbed by ${j.luck_delta}` : j.luck_delta < 0 ? `Blessed by ${-j.luck_delta}` : "Spot on";
+    const cls = j.luck_delta > 0 ? "down" : j.luck_delta < 0 ? "up" : "";
+    return h("tr", {},
+      h("td", { class: "l" },
+        h("span", { class: "who" }, h("span", { class: "rk" }, j.deserved_rank), dot(m), nameOf(m)),
+        h("div", { style: "font-size:12px;color:var(--ink-2);margin:2px 0 0 24px" },
+          `${fmt(j.actual_total)} pts + ${fmt(j.bench_points)} bench · actually ${ord(j.actual_rank)}`)),
+      h("td", { class: "num" }, fmt(j.deserved_total)),
+      h("td", { class: cls }, label));
+  });
+  pg.append(h("div", { class: "card" }, h("div", { class: "tbl-wrap" }, h("table", {},
+    h("thead", {}, h("tr", {}, ["Team", "Deserved pts", "Result"].map((x, i) =>
+      h("th", { class: i ? "" : "l" }, x)))),
+    h("tbody", {}, rows)))));
+}
+
+/* streaks & badges */
+pg = panels.streaks;
+pg.append(section("Streaks & badges"));
+pg.append(h("p", { class: "sub" }, "Hot runs, cold spells, points milestones, and the badges each manager has earned this season."));
+if (!gws.length) pg.append(emptyMsg("Shows up once the first gameweek finishes."));
+else {
+  function leadersBy(fn) {
+    const vals = M.map(m => fn(PM[m.entry_id])).filter(v => v != null);
+    if (!vals.length) return [];
+    const best = Math.max(...vals);
+    return M.filter(m => fn(PM[m.entry_id]) === best).map(m => m.entry_id);
+  }
+  function trailersBy(fn) {
+    const vals = M.map(m => fn(PM[m.entry_id])).filter(v => v != null);
+    if (!vals.length) return [];
+    const best = Math.min(...vals);
+    return M.filter(m => fn(PM[m.entry_id]) === best).map(m => m.entry_id);
+  }
+  const BADGE_DEFS = [
+    { ic: "\u{1F3C6}", label: "Most round wins", holders: leadersBy(p => p.wins) },
+    { ic: "\u{1F4C8}", label: "Highest average", holders: leadersBy(p => p.average) },
+    { ic: "\u{1F3AF}", label: "Mr. Consistent", holders: trailersBy(p => p.stdev) },
+    { ic: "\u{1F3A2}", label: "Rollercoaster", holders: leadersBy(p => p.stdev) },
+    { ic: "\u{1FA91}", label: "Bench waster", holders: leadersBy(p => p.bench_points) },
+    { ic: "\u{1F504}", label: "Market mover", holders: leadersBy(p => p.tx_accepted) },
+    { ic: "\u{1F6AB}", label: "Most bids rejected", holders: leadersBy(p => p.tx_denied) },
+  ];
+  const ws = D.records.longest_win_streak;
+  if (ws && ws.length > 1) BADGE_DEFS.push({ ic: "\u{1F525}", label: `${ws.length}-week win streak`, holders: [ws.entry_id] });
+  const badgesByEntry = Object.fromEntries(M.map(m => [m.entry_id, BADGE_DEFS.filter(b => b.holders.includes(m.entry_id))]));
+
+  const host = h("div", {});
+  let activeEntryId = ranked[0].entry_id;
+  const tabs = ranked.map(m => h("button", { type: "button", class: "teamtab", "aria-selected": "false",
+    onclick: () => { activeEntryId = m.entry_id; paintStreaks(); } }, dot(m), nameOf(m)));
+  const tabBtnByEntry = Object.fromEntries(ranked.map((m, i) => [m.entry_id, tabs[i]]));
+  function paintStreaks() {
+    for (const m of ranked) tabBtnByEntry[m.entry_id].setAttribute("aria-selected", m.entry_id === activeEntryId ? "true" : "false");
+    const m = byId[activeEntryId];
+    const s = D.streaks, ms = D.milestones[activeEntryId] || [];
+    const last = ms.length ? ms[ms.length - 1] : null;
+    const tiles = h("div", { class: "tiles" },
+      tile("Win streak now", `${s.win[activeEntryId].current}`, `Best: ${s.win[activeEntryId].best}`, { small: true }),
+      tile("Top-2 streak now", `${s.top2[activeEntryId].current}`, `Best: ${s.top2[activeEntryId].best}`, { small: true }),
+      tile("Worst cold spell", `${s.cold[activeEntryId].best}`, "Rounds in last place, back to back", { small: true }));
+    const badges = badgesByEntry[activeEntryId];
+    const badgeList = badges.length
+      ? h("div", { style: "display:flex;flex-wrap:wrap;gap:6px;margin-top:14px" },
+        badges.map(b => h("span", { class: "badge" }, b.ic + " " + b.label)))
+      : h("p", { class: "sub", style: "margin-top:14px" }, "No badges yet.");
+    const milestoneNote = h("p", { class: "sub", style: "margin-top:10px" },
+      last ? `Crossed ${fmt(last.threshold)} pts in GW${last.gw}` : "Hasn't hit 100 pts yet.");
+    host.textContent = "";
+    host.append(card(nameOf(m), null, tiles, badgeList, milestoneNote));
+  }
+  paintStreaks();
+  pg.append(h("div", { class: "teamtabs", role: "tablist" }, tabs), host);
+}
+
+/* weekly awards */
+pg = panels.awards;
+pg.append(section("Weekly awards"));
+pg.append(h("p", { class: "sub" }, "Five trophies handed out every finished gameweek. No captain-based awards — this league doesn't use them."));
+if (!D.weekly_awards.length) pg.append(emptyMsg("Shows up once the first gameweek finishes."));
+else {
+  const AWARD_DEFS = [
+    { key: "top_scorer", ic: "\u{1F3C6}", label: "Top scorer", suffix: "pts" },
+    { key: "wooden_spoon", ic: "\u{1F944}", label: "Wooden spoon", suffix: "pts" },
+    { key: "bench_flop", ic: "\u{1FA91}", label: "Bench flop", suffix: "pts left out" },
+    { key: "climber", ic: "\u{1F680}", label: "Climber of the week", suffix: "places" },
+    { key: "faller", ic: "\u{1F4C9}", label: "Faller of the week", suffix: "places" },
+  ];
+  let awardIdx = D.weekly_awards.length - 1;
+  const gwLabel = h("div", { style: "font-weight:650" }, "");
+  const grid = h("div", {});
+  const prevBtn = h("button", { class: "ghost", type: "button", "aria-label": "Previous gameweek",
+    onclick: () => { if (awardIdx > 0) { awardIdx--; paintAwards(); } } }, "←");
+  const nextBtn = h("button", { class: "ghost", type: "button", "aria-label": "Next gameweek",
+    onclick: () => { if (awardIdx < D.weekly_awards.length - 1) { awardIdx++; paintAwards(); } } }, "→");
+  function paintAwards() {
+    const wk = D.weekly_awards[awardIdx];
+    gwLabel.textContent = `Gameweek ${wk.gw}`;
+    prevBtn.disabled = awardIdx === 0;
+    nextBtn.disabled = awardIdx === D.weekly_awards.length - 1;
+    grid.textContent = "";
+    for (const def of AWARD_DEFS) {
+      const a = wk[def.key];
+      if (!a) continue;
+      const m = byId[a.entry_id];
+      const value = def.key === "climber" ? `+${a.delta}` : def.key === "faller" ? `−${a.delta}` : fmt(a.points);
+      grid.append(h("div", { class: "card award" },
+        h("div", { class: "ic" }, def.ic),
+        h("div", { class: "meta" },
+          h("p", { class: "label" }, def.label),
+          h("p", {}, h("span", { class: "who" }, dot(m), nameOf(m)))),
+        h("div", { class: "value" }, h("p", { class: "n" }, value), h("p", { class: "note" }, def.suffix))));
+    }
+  }
+  paintAwards();
+  pg.append(h("div", { style: "display:flex;align-items:center;justify-content:space-between;margin-bottom:12px" },
+    prevBtn, gwLabel, nextBtn), grid);
+}
+
+/* head to head */
+pg = panels.h2h;
+pg.append(section("Head-to-head"));
+pg.append(h("p", { class: "sub" }, "Pick any two managers to see how they'd have fared if it were a straight head-to-head, every single week."));
+if (M.length < 2) pg.append(emptyMsg("Needs at least two managers."));
+else {
+  const selA = h("select", { "aria-label": "First manager", onchange: () => paintH2H() },
+    ranked.map(m => h("option", { value: m.entry_id }, nameOf(m))));
+  const selB = h("select", { "aria-label": "Second manager", onchange: () => paintH2H() },
+    ranked.map(m => h("option", { value: m.entry_id }, nameOf(m))));
+  selA.value = ranked[0].entry_id;
+  selB.value = ranked[1].entry_id;
+
+  const recordHost = h("div", {});
+  const chartSection = h("div", {});
+  const barsHost = h("div", {});
+
+  function metricBars(label, unit, a, b, fn) {
+    return h("div", { style: "margin-bottom:16px" },
+      h("p", { style: "margin:0 0 6px;font-weight:650;font-size:13px" }, label),
+      barList([{ m: byId[a], value: fn(PM[a]) }, { m: byId[b], value: fn(PM[b]) }], unit));
+  }
+
+  function paintH2H() {
+    let a = Number(selA.value), b = Number(selB.value);
+    if (a === b) {
+      const alt = ranked.find(m => m.entry_id !== a);
+      b = alt.entry_id;
+      selB.value = b;
+    }
+    let aWins = 0, bWins = 0, ties = 0, ca = 0, cb = 0;
+    const valsA = [], valsB = [];
+    for (const r of finishedRounds) {
+      const sa = r.scores[a], sb = r.scores[b];
+      if (sa > sb) aWins++; else if (sb > sa) bWins++; else ties++;
+      ca += sa; cb += sb;
+      valsA.push(ca); valsB.push(cb);
+    }
+    let chartGws = gws, chartValsA = valsA, chartValsB = valsB;
+    if (D.live_round) {
+      chartGws = [...gws, D.live_round.gw];
+      chartValsA = [...valsA, ca + (D.live_round.scores[a] ?? 0)];
+      chartValsB = [...valsB, cb + (D.live_round.scores[b] ?? 0)];
+    }
+
+    recordHost.textContent = "";
+    recordHost.append(h("div", { style: "display:flex;align-items:center;gap:14px" },
+      h("div", { style: "flex:1;text-align:center" },
+        h("p", { style: "margin:0;font-size:28px;font-weight:650" }, aWins),
+        h("p", { class: "sub", style: "margin:2px 0 0" }, aWins === 1 ? "week won" : "weeks won")),
+      h("div", { style: "font-size:12px;font-weight:650;color:var(--ink-2);text-transform:uppercase" },
+        `${aWins}–${bWins}${ties ? "–" + ties : ""}`),
+      h("div", { style: "flex:1;text-align:center" },
+        h("p", { style: "margin:0;font-size:28px;font-weight:650" }, bWins),
+        h("p", { class: "sub", style: "margin:2px 0 0" }, bWins === 1 ? "week won" : "weeks won"))));
+
+    const host1 = h("div", { class: "chart" });
+    chartSection.textContent = "";
+    chartSection.append(host1, legend([byId[a], byId[b]]));
+    if (!chartGws.length) host1.append(emptyMsg("Charts appear after the first gameweek is finished."));
+    else lineChart(host1, { xs: chartGws, series: [{ m: byId[a], values: chartValsA }, { m: byId[b], values: chartValsB }],
+      label: `Cumulative points, ${nameOf(byId[a])} vs ${nameOf(byId[b])}` });
+
+    barsHost.textContent = "";
+    barsHost.append(
+      metricBars("Total points", "pts", a, b, p => p.total),
+      metricBars("Bench points", "pts", a, b, p => p.bench_points),
+      metricBars("Moves made", "moves", a, b, p => p.tx_accepted));
+  }
+  paintH2H();
+
+  pg.append(h("div", { class: "filters" }, selA, h("span", { class: "sub" }, "vs"), selB),
+    h("div", { class: "card" }, recordHost, chartSection),
+    card("Season totals", null, barsHost));
 }
 
 /* players */
@@ -1171,6 +1395,13 @@ if (chk.missing_lineups.length) dl.append(h("p", { class: "sub" }, `${chk.missin
 foot.append(dl);
 app.append(foot);
 document.title = meta.league_name + " · FPL Draft";
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
+}
 </script>
 </body>
 </html>
