@@ -500,7 +500,7 @@ if (!D.checks.all_ok) app.append(h("div", { class: "banner" }, h("strong", {}, "
   "some calculated scores do not match the site's own standings. See “Data checks” at the bottom."));
 
 /* tabs */
-const TABS = [["overview", "Overview"], ["liveround", "Live round"], ["rounds", "Rounds"], ["players", "Team info"], ["transactions", "Transactions"], ["fixtures", "Fixtures"], ["allplayers", "All players"], ["justice", "Table of justice"], ["streaks", "Streaks & badges"], ["awards", "Weekly awards"]];
+const TABS = [["overview", "Overview"], ["liveround", "Live round"], ["rounds", "Rounds"], ["players", "Team info"], ["transactions", "Transactions"], ["fixtures", "Fixtures"], ["allplayers", "All players"], ["justice", "Table of justice"], ["streaks", "Streaks & badges"], ["awards", "Weekly awards"], ["h2h", "Head-to-head"]];
 const anchor = h("div");
 const tabbar = h("div", { class: "tabs", role: "tablist", "aria-label": "Dashboard sections" });
 const panels = {}, tabBtns = {};
@@ -877,6 +877,82 @@ else {
   paintAwards();
   pg.append(h("div", { style: "display:flex;align-items:center;justify-content:space-between;margin-bottom:12px" },
     prevBtn, gwLabel, nextBtn), grid);
+}
+
+/* head to head */
+pg = panels.h2h;
+pg.append(section("Head-to-head"));
+pg.append(h("p", { class: "sub" }, "Pick any two managers to see how they'd have fared if it were a straight head-to-head, every single week."));
+if (M.length < 2) pg.append(emptyMsg("Needs at least two managers."));
+else {
+  const selA = h("select", { "aria-label": "First manager", onchange: () => paintH2H() },
+    ranked.map(m => h("option", { value: m.entry_id }, nameOf(m))));
+  const selB = h("select", { "aria-label": "Second manager", onchange: () => paintH2H() },
+    ranked.map(m => h("option", { value: m.entry_id }, nameOf(m))));
+  selA.value = ranked[0].entry_id;
+  selB.value = ranked[1].entry_id;
+
+  const recordHost = h("div", {});
+  const chartSection = h("div", {});
+  const barsHost = h("div", {});
+
+  function metricBars(label, unit, a, b, fn) {
+    return h("div", { style: "margin-bottom:16px" },
+      h("p", { style: "margin:0 0 6px;font-weight:650;font-size:13px" }, label),
+      barList([{ m: byId[a], value: fn(PM[a]) }, { m: byId[b], value: fn(PM[b]) }], unit));
+  }
+
+  function paintH2H() {
+    let a = Number(selA.value), b = Number(selB.value);
+    if (a === b) {
+      const alt = ranked.find(m => m.entry_id !== a);
+      b = alt.entry_id;
+      selB.value = b;
+    }
+    let aWins = 0, bWins = 0, ties = 0, ca = 0, cb = 0;
+    const valsA = [], valsB = [];
+    for (const r of finishedRounds) {
+      const sa = r.scores[a], sb = r.scores[b];
+      if (sa > sb) aWins++; else if (sb > sa) bWins++; else ties++;
+      ca += sa; cb += sb;
+      valsA.push(ca); valsB.push(cb);
+    }
+    let chartGws = gws, chartValsA = valsA, chartValsB = valsB;
+    if (D.live_round) {
+      chartGws = [...gws, D.live_round.gw];
+      chartValsA = [...valsA, ca + (D.live_round.scores[a] ?? 0)];
+      chartValsB = [...valsB, cb + (D.live_round.scores[b] ?? 0)];
+    }
+
+    recordHost.textContent = "";
+    recordHost.append(h("div", { style: "display:flex;align-items:center;gap:14px" },
+      h("div", { style: "flex:1;text-align:center" },
+        h("p", { style: "margin:0;font-size:28px;font-weight:650" }, aWins),
+        h("p", { class: "sub", style: "margin:2px 0 0" }, aWins === 1 ? "week won" : "weeks won")),
+      h("div", { style: "font-size:12px;font-weight:650;color:var(--ink-2);text-transform:uppercase" },
+        `${aWins}–${bWins}${ties ? "–" + ties : ""}`),
+      h("div", { style: "flex:1;text-align:center" },
+        h("p", { style: "margin:0;font-size:28px;font-weight:650" }, bWins),
+        h("p", { class: "sub", style: "margin:2px 0 0" }, bWins === 1 ? "week won" : "weeks won"))));
+
+    const host1 = h("div", { class: "chart" });
+    chartSection.textContent = "";
+    chartSection.append(host1, legend([byId[a], byId[b]]));
+    if (!chartGws.length) host1.append(emptyMsg("Charts appear after the first gameweek is finished."));
+    else lineChart(host1, { xs: chartGws, series: [{ m: byId[a], values: chartValsA }, { m: byId[b], values: chartValsB }],
+      label: `Cumulative points, ${nameOf(byId[a])} vs ${nameOf(byId[b])}` });
+
+    barsHost.textContent = "";
+    barsHost.append(
+      metricBars("Total points", "pts", a, b, p => p.total),
+      metricBars("Bench points", "pts", a, b, p => p.bench_points),
+      metricBars("Moves made", "moves", a, b, p => p.tx_accepted));
+  }
+  paintH2H();
+
+  pg.append(h("div", { class: "filters" }, selA, h("span", { class: "sub" }, "vs"), selB),
+    h("div", { class: "card" }, recordHost, chartSection),
+    card("Season totals", null, barsHost));
 }
 
 /* players */

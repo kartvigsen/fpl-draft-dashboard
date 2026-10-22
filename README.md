@@ -16,7 +16,7 @@ python3 update.py
 
 Then open `docs/index.html` in a browser. That is the whole routine.
 
-The dashboard has ten tabs: Overview, Live round, Rounds, Team info, Transactions, Fixtures, All players, Table of justice, Streaks & badges and Weekly awards. You can link straight to one, for example `index.html#rounds`.
+The dashboard has eleven tabs: Overview, Live round, Rounds, Team info, Transactions, Fixtures, All players, Table of justice, Streaks & badges, Weekly awards and Head-to-head. You can link straight to one, for example `index.html#rounds`.
 
 - Run it any time, including while a gameweek is still in progress — standings and each manager's total points update live. Records and "rounds won" still only count once a gameweek finishes, since bonus points and other adjustments aren't final until then.
 - Finished gameweeks are cached in `data/raw/`, so later runs only download the newest gameweek.
@@ -108,6 +108,10 @@ Switch between managers to see hot and cold runs (current and best win streaks, 
 ## Weekly awards tab
 
 Five trophies for whichever gameweek you step to with the arrows (defaults to the latest finished one): **Top scorer**, **Wooden spoon**, **Bench flop** (most points left on the bench), and **Climber**/**Faller of the week** (biggest rank swing from the previous gameweek — not shown on the first gameweek, since there's nothing to compare against). Nothing captain-based; this league doesn't use captains or bonuses.
+
+## Head-to-head tab
+
+Pick any two managers to see how they'd have fared as a straight head-to-head: a weeks-won record (finished gameweeks only), a cumulative points chart (extends to the live gameweek in progress, same as the Rounds and Overview charts), and a season-totals comparison for points, bench points and moves made. Picking the same manager in both dropdowns bumps the second one to the next available manager automatically.
 
 ## Weekly digest email
 
