@@ -97,6 +97,19 @@ Teams are ranked by **Avg FDR**, the average difficulty of their next fixtures, 
 
 This data comes from the classic (non-draft) FPL API, fetched best-effort: if it's briefly unreachable on an update run, the tab just keeps showing whatever was cached last time rather than breaking the rest of the update.
 
+## Weekly digest email
+
+`send_digest.py` can email the league a recap after each gameweek finishes — top scorer, wooden spoon, biggest bench blunder, climber/faller of the week, the "Table of Justice" (standings re-ranked as if bench points counted), and the current standings. The wording is picked each week from a bank of hand-written variants in a deliberately salty British/Scandinavian tone, so it doesn't read identically every time.
+
+It's off by default. To turn it on:
+
+1. Preview it first: `python3 send_digest.py --dry-run` renders the current gameweek to `digest_preview.html` without sending anything or touching any state — open it in a browser and check the tone lands before anyone else sees it.
+2. Generate a Gmail "app password": Google Account → Security → App passwords (needs 2-Step Verification turned on). This is not your normal Gmail password.
+3. In the repo's Settings → Secrets and variables → Actions, add three repository secrets: `GMAIL_USER` (the sending Gmail address), `GMAIL_APP_PASSWORD` (the app password from step 2), and `DIGEST_RECIPIENTS` (a comma-separated list of every recipient's email address). Keep these as secrets, never in a committed file — this repository is public.
+4. Set `"digest_enabled": true` in `config.json` and push.
+
+From then on, the scheduled workflow sends the digest automatically the first time it sees a finished gameweek it hasn't sent yet (tracked in `.digest_state.json`), so a gameweek is only emailed once no matter how many times the workflow runs that day.
+
 ## New season
 
 Draft leagues get a new ID each season. Change `league_id` in `config.json` and run `python3 update.py`. The next update automatically detects that the league changed (or that the cache predates this check) and re-downloads everything, so last season's cached "finished" gameweeks can't leak into the new season's numbers. You can still move or delete `data/raw/` yourself if you want to keep the old season's raw files elsewhere.

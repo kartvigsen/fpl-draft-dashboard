@@ -49,6 +49,16 @@ class WorkflowScheduleTest(unittest.TestCase):
         self.assertIn("actions/deploy-pages@v4", WORKFLOW)
         self.assertIn("workflow_dispatch:", WORKFLOW)
 
+    def test_digest_step_runs_after_the_rebuild_with_its_secrets(self):
+        self.assertIn("python3 send_digest.py", WORKFLOW)
+        self.assertIn("GMAIL_USER: ${{ secrets.GMAIL_USER }}", WORKFLOW)
+        self.assertIn("GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}", WORKFLOW)
+        self.assertIn("DIGEST_RECIPIENTS: ${{ secrets.DIGEST_RECIPIENTS }}", WORKFLOW)
+        self.assertLess(WORKFLOW.index("python3 update.py"), WORKFLOW.index("python3 send_digest.py"))
+
+    def test_digest_state_file_is_committed_only_if_it_exists(self):
+        self.assertIn("[ -f .digest_state.json ] && git add .digest_state.json", WORKFLOW)
+
 
 if __name__ == "__main__":
     unittest.main()
