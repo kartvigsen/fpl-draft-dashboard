@@ -42,6 +42,8 @@ The `docs/` folder is a complete static site (`index.html` and `data.js`). Optio
 
 If you use the included `.github/workflows/update.yml`, the dashboard rebuilds itself automatically five times a day, at 07:00, 12:00, 16:00, 20:00 and 23:00 Danish time (the workflow works out the current UTC offset itself, since Denmark shifts between UTC+1 and UTC+2), and also whenever `docs/index.html`, a top-level `.py` file, `config.json` or the workflow file changes on `main`. You can still trigger it manually from the Actions tab ("Run workflow").
 
+**Add to Home Screen:** the site is installable as an app icon on phones (`docs/manifest.json`, `docs/icons/`, `docs/sw.js`). On iOS, open the site in Safari and use Share → "Add to Home Screen"; on Android/Chrome, use the browser menu's "Install app" / "Add to Home screen". It opens without browser chrome and uses the site's blue bar-chart icon.
+
 ## Rules used
 
 - **Standings and total points:** update live while a gameweek is in progress, using that round's provisional score. The Standings table marks a live contribution with a small "(+N live)" next to a manager's points, and a note explains it while a round is in progress. The Overview tab's "Total points" and "Position in the league" charts extend one point further to show the live round too, labelled "GW_ live".

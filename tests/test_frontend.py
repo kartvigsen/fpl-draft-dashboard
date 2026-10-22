@@ -57,6 +57,41 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("no-repeat local", HTML)
         self.assertIn("no-repeat scroll", HTML)
 
+
+class HomeScreenInstallTest(unittest.TestCase):
+    """"Add to Home Screen" support: a web app manifest, icons, and a
+    minimal service worker so the dashboard installs like an app."""
+
+    def test_manifest_and_icons_are_linked_in_the_head(self):
+        self.assertIn('<link rel="manifest" href="manifest.json">', HTML)
+        self.assertIn('<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">', HTML)
+        self.assertIn('<link rel="icon" href="icons/favicon.ico" sizes="any">', HTML)
+        self.assertIn('<meta name="theme-color" content="#2a78d6">', HTML)
+        self.assertIn('<meta name="apple-mobile-web-app-capable" content="yes">', HTML)
+
+    def test_service_worker_is_registered(self):
+        self.assertIn('navigator.serviceWorker.register("sw.js")', HTML)
+
+    def test_manifest_json_is_valid_and_matches_the_linked_icons(self):
+        import json
+        manifest = json.loads((ROOT / "docs" / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["display"], "standalone")
+        icon_srcs = {icon["src"] for icon in manifest["icons"]}
+        self.assertEqual(icon_srcs, {
+            "icons/icon-192.png", "icons/icon-512.png",
+            "icons/icon-192-maskable.png", "icons/icon-512-maskable.png",
+        })
+        for src in icon_srcs:
+            self.assertTrue((ROOT / "docs" / src).exists(), f"missing {src}")
+
+    def test_favicon_and_apple_touch_icon_files_exist(self):
+        self.assertTrue((ROOT / "docs" / "icons" / "favicon.ico").exists())
+        self.assertTrue((ROOT / "docs" / "icons" / "apple-touch-icon.png").exists())
+
+    def test_service_worker_file_exists_and_handles_fetch(self):
+        sw = (ROOT / "docs" / "sw.js").read_text(encoding="utf-8")
+        self.assertIn('addEventListener("fetch"', sw)
+
     def test_all_moves_has_filters_for_team_type_result_gw_and_name(self):
         self.assertIn('"Filter by team"', HTML)
         self.assertIn('"Filter by type"', HTML)
