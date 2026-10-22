@@ -278,7 +278,7 @@ class HomeScreenInstallTest(unittest.TestCase):
     def test_tab_order_matches_the_requested_layout(self):
         tabs_line = re.search(r'const TABS = \[.*?\];', HTML).group(0)
         order = [k for k in re.findall(r'\["(\w+)",', tabs_line)]
-        self.assertEqual(order, ["overview", "liveround", "rounds", "players", "transactions", "fixtures", "allplayers"])
+        self.assertEqual(order, ["overview", "liveround", "rounds", "players", "transactions", "fixtures", "allplayers", "justice"])
 
     def test_players_tab_is_labeled_team_info(self):
         self.assertIn('["players", "Team info"]', HTML)
@@ -345,6 +345,19 @@ class HomeScreenInstallTest(unittest.TestCase):
     def test_data_checks_explains_an_unsubbed_live_total_instead_of_flagging_it(self):
         self.assertIn('"through_finished_plus_live_unsubbed"', HTML)
         self.assertIn("site's live round isn't subbed yet", HTML)
+
+    def test_table_of_justice_tab_ranks_by_deserved_total_and_labels_the_gap(self):
+        panel = HTML[HTML.index("/* table of justice */"):HTML.index("/* players */")]
+        self.assertIn("D.justice.map(", panel)
+        self.assertIn("j.deserved_total", panel)
+        self.assertIn("j.actual_rank", panel)
+        self.assertIn("`Robbed by ${j.luck_delta}`", panel)
+        self.assertIn("`Blessed by ${-j.luck_delta}`", panel)
+        self.assertIn('"Spot on"', panel)
+
+    def test_table_of_justice_handles_no_finished_gameweeks_yet(self):
+        panel = HTML[HTML.index("/* table of justice */"):HTML.index("/* players */")]
+        self.assertIn("if (!gws.length) pg.append(emptyMsg(", panel)
 
 
 if __name__ == "__main__":

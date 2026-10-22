@@ -16,7 +16,7 @@ python3 update.py
 
 Then open `docs/index.html` in a browser. That is the whole routine.
 
-The dashboard has seven tabs: Overview, Live round, Rounds, Team info, Transactions, Fixtures and All players. You can link straight to one, for example `index.html#rounds`.
+The dashboard has eight tabs: Overview, Live round, Rounds, Team info, Transactions, Fixtures, All players and Table of justice. You can link straight to one, for example `index.html#rounds`.
 
 - Run it any time, including while a gameweek is still in progress — standings and each manager's total points update live. Records and "rounds won" still only count once a gameweek finishes, since bonus points and other adjustments aren't final until then.
 - Finished gameweeks are cached in `data/raw/`, so later runs only download the newest gameweek.
@@ -96,6 +96,10 @@ Every Premier League team's next five fixtures (real match fixtures, nothing to 
 Teams are ranked by **Avg FDR**, the average difficulty of their next fixtures, easiest first — click "Avg FDR" or "Team" to re-sort. Untick one of the five "Fixture" checkboxes to leave that round out of the ranking (and the table); at least one must stay ticked. The dropdown above narrows the table to just the 5 teams with the easiest or hardest run of fixtures.
 
 This data comes from the classic (non-draft) FPL API, fetched best-effort: if it's briefly unreachable on an update run, the tab just keeps showing whatever was cached last time rather than breaking the rest of the update.
+
+## Table of justice tab
+
+The season standings re-ranked by total points **including bench points** — what the table would look like if every point your squad actually scored had counted, not just the starting XI. Each row shows the gap from where you actually sit: "Robbed by N" means bench points would have put you N places higher; "Blessed by N" means you're sitting N places better than your squad's total deserves.
 
 ## Weekly digest email
 

@@ -428,6 +428,23 @@ def build(raw=RAW, now=None):
         records["longest_win_streak"] = best_streak
         records["ties_for_win"] = sum(1 for r in rounds if len(r["winners"]) > 1)
 
+    # ---- table of justice ------------------------------------------------
+    # Standings re-ranked by total points including bench points, i.e. what
+    # the table would look like if every point a squad actually scored
+    # counted -- not just the starting XI. luck_delta is actual_rank minus
+    # this "deserved" rank: positive means ranked worse than deserved
+    # (robbed), negative means ranked better (blessed).
+    justice = sorted(
+        ({"entry_id": e, "actual_rank": per_manager[str(e)]["rank"],
+          "actual_total": per_manager[str(e)]["total"],
+          "bench_points": per_manager[str(e)]["bench_points"],
+          "deserved_total": per_manager[str(e)]["total"] + per_manager[str(e)]["bench_points"]}
+         for e in eids),
+        key=lambda j: -j["deserved_total"])
+    for i, j in enumerate(justice):
+        j["deserved_rank"] = i + 1
+        j["luck_delta"] = j["actual_rank"] - j["deserved_rank"]
+
     # ---- transactions ---------------------------------------------------
     tx_matrix = {str(e): {str(gw): 0 for gw in all_gws} for e in eids}
     for t in accepted:
@@ -549,6 +566,7 @@ def build(raw=RAW, now=None):
                    "cumulative": {str(e): cum[e] for e in eids},
                    "rank": {str(e): rank_by_gw[e] for e in eids}},
         "records": records,
+        "justice": justice,
         "transactions": {"matrix": tx_matrix, "moves": moves},
         "players": {"scorers_by_manager": scorers_by_manager,
                     "best_rounds": best_rounds[:10],
