@@ -6,13 +6,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
 import build_stats  # noqa: E402
-import mock  # noqa: E402
+import mock  # noqa: E402 -- this project's own fixture builder, not unittest.mock
 import send_digest  # noqa: E402
 
 
@@ -111,6 +112,24 @@ class RenderTest(unittest.TestCase):
             self.assertIn(m["team"], html)
             total = self.data["per_manager"][str(m["entry_id"])]["total"]
             self.assertIn(str(total), html)
+
+
+class SendTest(unittest.TestCase):
+    """Port 465/SMTP_SSL was observed dropping the connection mid-login
+    from GitHub Actions specifically (smtplib.SMTPServerDisconnected);
+    587/STARTTLS is the reliable path, so lock in that it's what's used."""
+
+    @patch("send_digest.smtplib.SMTP")
+    def test_uses_starttls_on_587_not_implicit_ssl_on_465(self, mock_smtp_cls):
+        mock_server = MagicMock()
+        mock_smtp_cls.return_value.__enter__.return_value = mock_server
+
+        send_digest.send("Subject", "<p>html</p>", "text", ["a@example.com"], "me@gmail.com", "app password")
+
+        mock_smtp_cls.assert_called_once_with("smtp.gmail.com", 587)
+        mock_server.starttls.assert_called_once()
+        mock_server.login.assert_called_once_with("me@gmail.com", "app password")
+        mock_server.sendmail.assert_called_once()
 
 
 class OrdinalTest(unittest.TestCase):

@@ -272,8 +272,13 @@ def send(subject, html, text, recipients, gmail_user, gmail_password):
     msg["To"] = ", ".join(recipients)
     msg.attach(MIMEText(text, "plain"))
     msg.attach(MIMEText(html, "html"))
+    # Port 587 + STARTTLS is the more reliable path for Gmail from CI
+    # runners -- port 465 (implicit SSL) has been seen to drop the
+    # connection mid-login (smtplib.SMTPServerDisconnected) from GitHub
+    # Actions specifically, even with correct credentials.
     context = ssl.create_default_context()
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
+    with smtplib.SMTP("smtp.gmail.com", 587) as server:
+        server.starttls(context=context)
         server.login(gmail_user, gmail_password)
         server.sendmail(gmail_user, recipients, msg.as_string())
 
@@ -310,8 +315,8 @@ def main(argv):
         print("digest_enabled is not set to true in config.json - skipping send (preview with --dry-run).")
         return
 
-    gmail_user = os.environ.get("GMAIL_USER")
-    gmail_password = os.environ.get("GMAIL_APP_PASSWORD")
+    gmail_user = os.environ.get("GMAIL_USER", "").strip()
+    gmail_password = os.environ.get("GMAIL_APP_PASSWORD", "").strip()
     recipients_raw = os.environ.get("DIGEST_RECIPIENTS", "")
     recipients = [r.strip() for r in recipients_raw.split(",") if r.strip()]
     if not gmail_user or not gmail_password:
