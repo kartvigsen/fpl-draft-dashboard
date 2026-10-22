@@ -30,9 +30,8 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
     steps:
       - name: Check Danish local time
         id: gate
@@ -99,6 +98,17 @@ jobs:
         with:
           path: docs
 
+  # A separate job so the github-pages environment's branch protection
+  # (publish from main only) gates just this deploy step, not the whole
+  # job above -- the data rebuild and digest send can still be run and
+  # tested (e.g. via "Run workflow") from any branch.
+  deploy:
+    needs: update
+    if: needs.update.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
-        if: steps.gate.outputs.run == 'true'
         uses: actions/deploy-pages@v4
