@@ -61,26 +61,34 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         run: python3 update.py
 
-      - name: Send the weekly digest, if a new gameweek just finished
-        if: steps.gate.outputs.run == 'true'
-        env:
-          GMAIL_USER: ${{ secrets.GMAIL_USER }}
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          DIGEST_RECIPIENTS: ${{ secrets.DIGEST_RECIPIENTS }}
-        run: python3 send_digest.py
-
       - name: Save new data to the repository
         if: steps.gate.outputs.run == 'true'
         run: |
           git config user.name "fpl-dashboard-bot"
           git config user.email "actions@users.noreply.github.com"
           git add data docs
-          [ -f .digest_state.json ] && git add .digest_state.json
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
             git commit -m "Update data $(date -u +%Y-%m-%d)"
             git push
+          fi
+
+      - name: Send the weekly digest, if a new gameweek just finished
+        if: steps.gate.outputs.run == 'true'
+        continue-on-error: true   # a digest/email hiccup must never block the dashboard update or deploy above
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          DIGEST_RECIPIENTS: ${{ secrets.DIGEST_RECIPIENTS }}
+        run: |
+          python3 send_digest.py
+          if [ -f .digest_state.json ]; then
+            git add .digest_state.json
+            if ! git diff --cached --quiet -- .digest_state.json; then
+              git commit -m "Record digest sent for this gameweek"
+              git push
+            fi
           fi
 
       - uses: actions/configure-pages@v5
