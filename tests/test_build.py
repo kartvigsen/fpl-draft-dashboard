@@ -680,6 +680,51 @@ class StreaksAndMilestonesTest(unittest.TestCase):
         self.assertEqual(m[charlie], [{"threshold": 100, "gw": 3}])
 
 
+class WeeklyAwardsTest(unittest.TestCase):
+    """Four managers (the default mock.py line-up), two finished gameweeks.
+    GW1 establishes a baseline rank order with no climber/faller to
+    compare against (first gameweek). GW2's scores are picked so Alpha's
+    rank climb (+3) and Delta's rank fall (-2) are each unambiguously the
+    biggest -- no ties to worry about -- and bench points differ enough
+    each gameweek that bench_flop has a clear, distinct winner too."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        mock.write_raw(
+            self.tmp,
+            gw_scores=[[40, 50, 60, 70], [80, 30, 55, 45]],
+            current_finished=True,
+            bench={(1, 0): 1, (1, 1): 2, (1, 2): 3, (1, 3): 4,
+                   (2, 0): 5, (2, 1): 3, (2, 2): 9, (2, 3): 2},
+        )
+        self.d = build_stats.build(self.tmp)
+        self.by_team = {m["team"]: m["entry_id"] for m in self.d["managers"]}
+        self.awards = self.d["weekly_awards"]
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_first_gameweek_has_no_climber_or_faller(self):
+        wk1 = self.awards[0]
+        self.assertEqual(wk1["gw"], 1)
+        self.assertEqual(wk1["top_scorer"], {"entry_id": self.by_team["Team Delta"], "points": 70})
+        self.assertEqual(wk1["wooden_spoon"], {"entry_id": self.by_team["Team Alpha"], "points": 40})
+        self.assertEqual(wk1["bench_flop"], {"entry_id": self.by_team["Team Delta"], "points": 4})
+        self.assertIsNone(wk1["climber"])
+        self.assertIsNone(wk1["faller"])
+
+    def test_second_gameweek_awards_and_unambiguous_climber_faller(self):
+        wk2 = self.awards[1]
+        self.assertEqual(wk2["gw"], 2)
+        self.assertEqual(wk2["top_scorer"], {"entry_id": self.by_team["Team Alpha"], "points": 80})
+        self.assertEqual(wk2["wooden_spoon"], {"entry_id": self.by_team["Team Bravo"], "points": 30})
+        self.assertEqual(wk2["bench_flop"], {"entry_id": self.by_team["Team Charlie"], "points": 9})
+        # Alpha: last (4th) in gw1 -> 1st in gw2, a 3-place climb.
+        self.assertEqual(wk2["climber"], {"entry_id": self.by_team["Team Alpha"], "delta": 3})
+        # Delta: 1st in gw1 -> 3rd in gw2, a 2-place fall.
+        self.assertEqual(wk2["faller"], {"entry_id": self.by_team["Team Delta"], "delta": 2})
+
+
 class LiveRoundTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())

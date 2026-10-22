@@ -148,6 +148,14 @@ details .tbl-wrap { margin-top: 8px; }
   display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
   background: var(--wash); color: var(--ink-2);
 }
+.award { display: flex; align-items: center; gap: 12px; }
+.award .ic { font-size: 22px; flex: none; width: 32px; text-align: center; }
+.award .meta { flex: 1; min-width: 0; }
+.award .label { color: var(--ink-2); font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .03em; margin: 0; }
+.award .who { margin: 3px 0 0; font-weight: 650; }
+.award .value { text-align: right; flex: none; }
+.award .value .n { font-size: 18px; font-weight: 650; }
+.award .value .note { color: var(--ink-2); font-size: 11px; }
 .teamtabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 14px; }
 .teamtab {
   background: var(--wash); border: 1px solid var(--border); border-radius: 999px;
@@ -492,7 +500,7 @@ if (!D.checks.all_ok) app.append(h("div", { class: "banner" }, h("strong", {}, "
   "some calculated scores do not match the site's own standings. See “Data checks” at the bottom."));
 
 /* tabs */
-const TABS = [["overview", "Overview"], ["liveround", "Live round"], ["rounds", "Rounds"], ["players", "Team info"], ["transactions", "Transactions"], ["fixtures", "Fixtures"], ["allplayers", "All players"], ["justice", "Table of justice"], ["streaks", "Streaks & badges"]];
+const TABS = [["overview", "Overview"], ["liveround", "Live round"], ["rounds", "Rounds"], ["players", "Team info"], ["transactions", "Transactions"], ["fixtures", "Fixtures"], ["allplayers", "All players"], ["justice", "Table of justice"], ["streaks", "Streaks & badges"], ["awards", "Weekly awards"]];
 const anchor = h("div");
 const tabbar = h("div", { class: "tabs", role: "tablist", "aria-label": "Dashboard sections" });
 const panels = {}, tabBtns = {};
@@ -825,6 +833,50 @@ else {
   }
   paintStreaks();
   pg.append(h("div", { class: "teamtabs", role: "tablist" }, tabs), host);
+}
+
+/* weekly awards */
+pg = panels.awards;
+pg.append(section("Weekly awards"));
+pg.append(h("p", { class: "sub" }, "Five trophies handed out every finished gameweek. No captain-based awards — this league doesn't use them."));
+if (!D.weekly_awards.length) pg.append(emptyMsg("Shows up once the first gameweek finishes."));
+else {
+  const AWARD_DEFS = [
+    { key: "top_scorer", ic: "\u{1F3C6}", label: "Top scorer", suffix: "pts" },
+    { key: "wooden_spoon", ic: "\u{1F944}", label: "Wooden spoon", suffix: "pts" },
+    { key: "bench_flop", ic: "\u{1FA91}", label: "Bench flop", suffix: "pts left out" },
+    { key: "climber", ic: "\u{1F680}", label: "Climber of the week", suffix: "places" },
+    { key: "faller", ic: "\u{1F4C9}", label: "Faller of the week", suffix: "places" },
+  ];
+  let awardIdx = D.weekly_awards.length - 1;
+  const gwLabel = h("div", { style: "font-weight:650" }, "");
+  const grid = h("div", {});
+  const prevBtn = h("button", { class: "ghost", type: "button", "aria-label": "Previous gameweek",
+    onclick: () => { if (awardIdx > 0) { awardIdx--; paintAwards(); } } }, "←");
+  const nextBtn = h("button", { class: "ghost", type: "button", "aria-label": "Next gameweek",
+    onclick: () => { if (awardIdx < D.weekly_awards.length - 1) { awardIdx++; paintAwards(); } } }, "→");
+  function paintAwards() {
+    const wk = D.weekly_awards[awardIdx];
+    gwLabel.textContent = `Gameweek ${wk.gw}`;
+    prevBtn.disabled = awardIdx === 0;
+    nextBtn.disabled = awardIdx === D.weekly_awards.length - 1;
+    grid.textContent = "";
+    for (const def of AWARD_DEFS) {
+      const a = wk[def.key];
+      if (!a) continue;
+      const m = byId[a.entry_id];
+      const value = def.key === "climber" ? `+${a.delta}` : def.key === "faller" ? `−${a.delta}` : fmt(a.points);
+      grid.append(h("div", { class: "card award" },
+        h("div", { class: "ic" }, def.ic),
+        h("div", { class: "meta" },
+          h("p", { class: "label" }, def.label),
+          h("p", {}, h("span", { class: "who" }, dot(m), nameOf(m)))),
+        h("div", { class: "value" }, h("p", { class: "n" }, value), h("p", { class: "note" }, def.suffix))));
+    }
+  }
+  paintAwards();
+  pg.append(h("div", { style: "display:flex;align-items:center;justify-content:space-between;margin-bottom:12px" },
+    prevBtn, gwLabel, nextBtn), grid);
 }
 
 /* players */

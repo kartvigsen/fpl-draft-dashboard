@@ -474,6 +474,38 @@ def build(raw=RAW, now=None):
                 reached.append({"threshold": t, "gw": gw_hit})
         milestones[str(e)] = reached
 
+    # ---- weekly awards ----------------------------------------------------
+    # Five trophies per finished gameweek: top scorer, wooden spoon, bench
+    # flop, and the biggest rank climb/fall from the previous finished
+    # gameweek (the first gameweek has no climber/faller to compare
+    # against). Nothing captain-based -- this league doesn't use them.
+    weekly_awards = []
+    prev_round_rank = None
+    for gw in complete:
+        round_rank = _rank_desc(scores[gw])
+        top = max(eids, key=lambda e: scores[gw][e])
+        bottom = min(eids, key=lambda e: scores[gw][e])
+        bench_this = {e: bench_pts[e].get(gw, 0) for e in eids}
+        flop = max(eids, key=lambda e: bench_this[e])
+        climber = faller = None
+        if prev_round_rank is not None:
+            deltas = {e: prev_round_rank[e] - round_rank[e] for e in eids}  # positive = moved up
+            best_e = max(eids, key=lambda e: deltas[e])
+            worst_e = min(eids, key=lambda e: deltas[e])
+            if deltas[best_e] > 0:
+                climber = {"entry_id": best_e, "delta": deltas[best_e]}
+            if deltas[worst_e] < 0:
+                faller = {"entry_id": worst_e, "delta": -deltas[worst_e]}
+        weekly_awards.append({
+            "gw": gw,
+            "top_scorer": {"entry_id": top, "points": scores[gw][top]},
+            "wooden_spoon": {"entry_id": bottom, "points": scores[gw][bottom]},
+            "bench_flop": {"entry_id": flop, "points": bench_this[flop]},
+            "climber": climber,
+            "faller": faller,
+        })
+        prev_round_rank = round_rank
+
     # ---- transactions ---------------------------------------------------
     tx_matrix = {str(e): {str(gw): 0 for gw in all_gws} for e in eids}
     for t in accepted:
@@ -598,6 +630,7 @@ def build(raw=RAW, now=None):
         "justice": justice,
         "streaks": streaks,
         "milestones": milestones,
+        "weekly_awards": weekly_awards,
         "transactions": {"matrix": tx_matrix, "moves": moves},
         "players": {"scorers_by_manager": scorers_by_manager,
                     "best_rounds": best_rounds[:10],

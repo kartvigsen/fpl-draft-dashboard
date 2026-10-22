@@ -278,7 +278,7 @@ class HomeScreenInstallTest(unittest.TestCase):
     def test_tab_order_matches_the_requested_layout(self):
         tabs_line = re.search(r'const TABS = \[.*?\];', HTML).group(0)
         order = [k for k in re.findall(r'\["(\w+)",', tabs_line)]
-        self.assertEqual(order, ["overview", "liveround", "rounds", "players", "transactions", "fixtures", "allplayers", "justice", "streaks"])
+        self.assertEqual(order, ["overview", "liveround", "rounds", "players", "transactions", "fixtures", "allplayers", "justice", "streaks", "awards"])
 
     def test_players_tab_is_labeled_team_info(self):
         self.assertIn('["players", "Team info"]', HTML)
@@ -379,8 +379,30 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn("M.filter(m => fn(PM[m.entry_id]) === best).map(m => m.entry_id)", panel)
 
     def test_streaks_tab_handles_no_finished_gameweeks_yet(self):
-        panel = HTML[HTML.index("/* streaks & badges */"):HTML.index("/* players */")]
+        panel = HTML[HTML.index("/* streaks & badges */"):HTML.index("/* weekly awards */")]
         self.assertIn("if (!gws.length) pg.append(emptyMsg(", panel)
+
+    def test_weekly_awards_has_no_captain_based_category(self):
+        panel = HTML[HTML.index("/* weekly awards */"):HTML.index("/* players */")]
+        self.assertIn("No captain-based awards", panel)  # the explanatory subtitle
+        for needle in ("is_captain", "is_vice_captain", "vice-captain", "Captain of the week"):
+            self.assertNotIn(needle, panel)
+
+    def test_weekly_awards_steps_through_gameweeks_defaulting_to_latest(self):
+        panel = HTML[HTML.index("/* weekly awards */"):HTML.index("/* players */")]
+        self.assertIn("let awardIdx = D.weekly_awards.length - 1;", panel)
+        self.assertIn("awardIdx--; paintAwards();", panel)
+        self.assertIn("awardIdx++; paintAwards();", panel)
+        self.assertIn("prevBtn.disabled = awardIdx === 0;", panel)
+        self.assertIn("nextBtn.disabled = awardIdx === D.weekly_awards.length - 1;", panel)
+
+    def test_weekly_awards_skips_climber_faller_when_absent(self):
+        panel = HTML[HTML.index("/* weekly awards */"):HTML.index("/* players */")]
+        self.assertIn("if (!a) continue;", panel)
+
+    def test_weekly_awards_handles_no_finished_gameweeks_yet(self):
+        panel = HTML[HTML.index("/* weekly awards */"):HTML.index("/* players */")]
+        self.assertIn("if (!D.weekly_awards.length) pg.append(emptyMsg(", panel)
 
 
 if __name__ == "__main__":
