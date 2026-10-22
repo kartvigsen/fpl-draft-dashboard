@@ -278,7 +278,7 @@ class HomeScreenInstallTest(unittest.TestCase):
     def test_tab_order_matches_the_requested_layout(self):
         tabs_line = re.search(r'const TABS = \[.*?\];', HTML).group(0)
         order = [k for k in re.findall(r'\["(\w+)",', tabs_line)]
-        self.assertEqual(order, ["overview", "liveround", "rounds", "players", "transactions", "fixtures", "allplayers", "justice"])
+        self.assertEqual(order, ["overview", "liveround", "rounds", "players", "transactions", "fixtures", "allplayers", "justice", "streaks"])
 
     def test_players_tab_is_labeled_team_info(self):
         self.assertIn('["players", "Team info"]', HTML)
@@ -356,7 +356,30 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn('"Spot on"', panel)
 
     def test_table_of_justice_handles_no_finished_gameweeks_yet(self):
-        panel = HTML[HTML.index("/* table of justice */"):HTML.index("/* players */")]
+        panel = HTML[HTML.index("/* table of justice */"):HTML.index("/* streaks & badges */")]
+        self.assertIn("if (!gws.length) pg.append(emptyMsg(", panel)
+
+    def test_streaks_tab_switches_between_managers_like_team_info(self):
+        panel = HTML[HTML.index("/* streaks & badges */"):HTML.index("/* players */")]
+        self.assertIn('class: "teamtab"', panel)
+        self.assertIn("activeEntryId = m.entry_id; paintStreaks();", panel)
+
+    def test_streaks_tab_shows_current_and_best_for_each_streak_type(self):
+        panel = HTML[HTML.index("/* streaks & badges */"):HTML.index("/* players */")]
+        self.assertIn("s.win[activeEntryId].current", panel)
+        self.assertIn("s.win[activeEntryId].best", panel)
+        self.assertIn("s.top2[activeEntryId].current", panel)
+        self.assertIn("s.cold[activeEntryId].best", panel)
+
+    def test_streaks_tab_badges_account_for_ties(self):
+        # Every badge is awarded to every manager tied for the lead, not
+        # just the first one found.
+        panel = HTML[HTML.index("/* streaks & badges */"):HTML.index("/* players */")]
+        self.assertIn("function leadersBy(fn) {", panel)
+        self.assertIn("M.filter(m => fn(PM[m.entry_id]) === best).map(m => m.entry_id)", panel)
+
+    def test_streaks_tab_handles_no_finished_gameweeks_yet(self):
+        panel = HTML[HTML.index("/* streaks & badges */"):HTML.index("/* players */")]
         self.assertIn("if (!gws.length) pg.append(emptyMsg(", panel)
 
 

@@ -16,7 +16,7 @@ python3 update.py
 
 Then open `docs/index.html` in a browser. That is the whole routine.
 
-The dashboard has eight tabs: Overview, Live round, Rounds, Team info, Transactions, Fixtures, All players and Table of justice. You can link straight to one, for example `index.html#rounds`.
+The dashboard has nine tabs: Overview, Live round, Rounds, Team info, Transactions, Fixtures, All players, Table of justice and Streaks & badges. You can link straight to one, for example `index.html#rounds`.
 
 - Run it any time, including while a gameweek is still in progress — standings and each manager's total points update live. Records and "rounds won" still only count once a gameweek finishes, since bonus points and other adjustments aren't final until then.
 - Finished gameweeks are cached in `data/raw/`, so later runs only download the newest gameweek.
@@ -100,6 +100,10 @@ This data comes from the classic (non-draft) FPL API, fetched best-effort: if it
 ## Table of justice tab
 
 The season standings re-ranked by total points **including bench points** — what the table would look like if every point your squad actually scored had counted, not just the starting XI. Each row shows the gap from where you actually sit: "Robbed by N" means bench points would have put you N places higher; "Blessed by N" means you're sitting N places better than your squad's total deserves.
+
+## Streaks & badges tab
+
+Switch between managers to see hot and cold runs (current and best win streaks, top-2 finishes, and the worst run of last-place finishes), the latest 100-point milestone crossed, and season-long badges (Most round wins, Highest average, Mr. Consistent for lowest week-to-week variance, Rollercoaster for the highest, Bench waster, Market mover, Most bids rejected, and a win-streak badge once someone's strung together more than one). A badge is awarded to every manager tied for the lead, not just the first one found.
 
 ## Weekly digest email
 

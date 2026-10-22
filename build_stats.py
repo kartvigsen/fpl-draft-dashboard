@@ -445,6 +445,35 @@ def build(raw=RAW, now=None):
         j["deserved_rank"] = i + 1
         j["luck_delta"] = j["actual_rank"] - j["deserved_rank"]
 
+    # ---- streaks & milestones --------------------------------------------
+    n_managers = len(eids)
+    win_streaks = {e: {"current": 0, "best": 0} for e in eids}
+    top2_streaks = {e: {"current": 0, "best": 0} for e in eids}
+    cold_streaks = {e: {"current": 0, "best": 0} for e in eids}
+    for gw in complete:
+        round_rank = _rank_desc(scores[gw])
+        for e in eids:
+            for streaks, hit in ((win_streaks, round_rank[e] == 1),
+                                  (top2_streaks, round_rank[e] <= 2),
+                                  (cold_streaks, round_rank[e] == n_managers)):
+                streaks[e]["current"] = streaks[e]["current"] + 1 if hit else 0
+                streaks[e]["best"] = max(streaks[e]["best"], streaks[e]["current"])
+    streaks = {"win": {str(e): win_streaks[e] for e in eids},
+               "top2": {str(e): top2_streaks[e] for e in eids},
+               "cold": {str(e): cold_streaks[e] for e in eids}}
+
+    # Every 100-point threshold crossed so far, and the gameweek it happened.
+    max_total = max((cum[e][-1] for e in eids if cum[e]), default=0)
+    thresholds = range(100, max_total + 1, 100)
+    milestones = {}
+    for e in eids:
+        reached = []
+        for t in thresholds:
+            gw_hit = next((complete[i] for i, v in enumerate(cum[e]) if v >= t), None)
+            if gw_hit is not None:
+                reached.append({"threshold": t, "gw": gw_hit})
+        milestones[str(e)] = reached
+
     # ---- transactions ---------------------------------------------------
     tx_matrix = {str(e): {str(gw): 0 for gw in all_gws} for e in eids}
     for t in accepted:
@@ -567,6 +596,8 @@ def build(raw=RAW, now=None):
                    "rank": {str(e): rank_by_gw[e] for e in eids}},
         "records": records,
         "justice": justice,
+        "streaks": streaks,
+        "milestones": milestones,
         "transactions": {"matrix": tx_matrix, "moves": moves},
         "players": {"scorers_by_manager": scorers_by_manager,
                     "best_rounds": best_rounds[:10],
