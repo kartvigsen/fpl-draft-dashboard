@@ -327,6 +327,15 @@ class HomeScreenInstallTest(unittest.TestCase):
     def test_tab_bar_does_not_rubber_band_when_swiped(self):
         self.assertIn("overscroll-behavior-x: contain;", HTML)
 
+    def test_tab_bar_shows_an_edge_shadow_like_scrollable_tables(self):
+        # With eleven tabs the bar overflows on desktop too, not just
+        # mobile -- same scroll-shadow technique as .tbl-wrap so it's
+        # clear there's more to scroll to, not just a cut-off list.
+        tabs_css = HTML[HTML.index(".tabs {"):HTML.index(".tabs::-webkit-scrollbar")]
+        self.assertIn("no-repeat local", tabs_css)
+        self.assertIn("no-repeat scroll", tabs_css)
+        self.assertIn("var(--page);", tabs_css)  # opaque base, since the bar is sticky
+
     def test_feedback_is_removed(self):
         for needle in ("Feedback", "feedback", "openFeedbackIssue", "activeTabLabel"):
             self.assertNotIn(needle, HTML)

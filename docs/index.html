@@ -218,8 +218,14 @@ textarea {
 [hidden] { display: none !important; }
 .tabs {
   display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; margin-top: 18px;
-  position: sticky; top: 0; z-index: 10; background: var(--page); border-bottom: 1px solid var(--grid);
+  position: sticky; top: 0; z-index: 10; border-bottom: 1px solid var(--grid);
   overscroll-behavior-x: contain;
+  background:
+    linear-gradient(to right, var(--page) 50%, transparent) left / 24px 100% no-repeat local,
+    linear-gradient(to left, var(--page) 50%, transparent) right / 24px 100% no-repeat local,
+    linear-gradient(to right, rgba(0,0,0,.16), transparent) left / 10px 100% no-repeat scroll,
+    linear-gradient(to left, rgba(0,0,0,.16), transparent) right / 10px 100% no-repeat scroll,
+    var(--page);
 }
 .tabs::-webkit-scrollbar { display: none; }
 .tab {
