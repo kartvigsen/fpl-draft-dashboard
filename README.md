@@ -60,6 +60,8 @@ If you use the included `.github/workflows/update.yml`, the dashboard rebuilds i
 
 ## Transactions tab
 
+- **Transfer suggestions** (top of the tab, with a team switcher): like-for-like swaps for the next gameweek, since a draft squad has to keep its 2/5/5/3 shape. Each team's weakest players are paired with the best available free agents in the same position: weakest with best, then second weakest with second best, and so on. A pair is kept only if it improves the outlook by at least 1 point, and each team shows its top 6. **Outlook** is the player's FPL form, plus one point for each step their next five fixtures are easier than an average difficulty of 3, minus one for each step harder. Injured, suspended or unavailable free agents are never suggested, and neither are free agents with under 180 minutes this season, which filters out one-off cameos. Doubtful ones are flagged with their chance of playing and the FPL news. An unavailable squad player counts as 0, so they come up first as a drop. Each card shows form, points per game, minutes and the next five fixtures' difficulty, so a big name on a short cold run is easy to spot. Moves are still made in the official FPL Draft app; the dashboard only reads public data.
+
 - **All moves** can be filtered by team, type (free agent/waiver), result (accepted/denied, shown in green/red), gameweek and player name (matches either the player brought in or let go). It shows 12 rows at a time with a "Show all" button; changing a filter goes back to 12 rows of the new, filtered list. There's no Net/points column here — see the Players tab for scoring.
 - **Moves per gameweek** (the heat map) lists teams by current league standing, not by the order they were added to the league.
 

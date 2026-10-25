@@ -188,6 +188,29 @@ details .tbl-wrap { margin-top: 8px; }
   box-shadow: 0 2px 6px rgba(0,0,0,.25); border: 0; font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
 .player-chip:hover, .player-chip:focus-visible { filter: brightness(1.04); }
+.sg-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.sg { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
+.sg-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.sg-pos { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: var(--wash); color: var(--ink-2); }
+.sg-gain { font-weight: 750; color: var(--good); font-variant-numeric: tabular-nums; }
+.sg-gain-note { font-size: 12px; color: var(--muted); }
+.sg-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
+.sg-row + .sg-row { border-top: 1px dashed var(--border); }
+.sg-tag { flex: none; width: 36px; text-align: center; font-size: 10.5px; font-weight: 800; border-radius: 6px; padding: 2px 0; border: 1px solid currentColor; }
+.sg-tag.in { color: var(--good); }
+.sg-tag.out { color: var(--bad); }
+.sg-who { flex: 1; min-width: 0; }
+.sg-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sg-name { font-size: 14px; }
+.sg-club { color: var(--ink-2); font-size: 12px; }
+.sg-meta { color: var(--muted); font-size: 12px; }
+.sg-meta .nw { white-space: nowrap; }
+.sg-flag { margin-left: 6px; font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 999px; }
+.sg-flag.warn { background: var(--series-4); color: #0b0b0b; }
+.sg-flag.bad { background: var(--bad); color: #fff; }
+.sg-fx { flex: none; display: flex; gap: 2px; }
+.sg-chip { width: 17px; height: 20px; line-height: 20px; text-align: center; border-radius: 4px; font-size: 10.5px; font-weight: 700; background: var(--wash); color: var(--ink-2); }
+.sg-foot { margin-top: 12px; }
 .player-chip:not(.played) { opacity: .5; box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); }
 .player-chip .nm { font-weight: 700; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .player-chip .cl { color: #6b6a65; font-size: 10px; }
@@ -286,6 +309,8 @@ const sv = (tag, props, ...kids) => mk(true, tag, props, kids.flat(Infinity));
 const fmt = n => (n == null ? "–" : Number(n).toLocaleString("en-GB"));
 const col = m => `var(--series-${(m.color % 8) + 1})`;
 const dot = m => h("span", { class: "dot", style: `background:${col(m)}` });
+const fdrColor = d => `var(--fdr-${d})`;
+const fdrInk = d => (d === 2 || d === 3) ? "var(--h-ink-light)" : "var(--h-ink-dark)";
 
 /* ---------- theme toggle ---------- */
 function applyTheme(t) { if (t) document.documentElement.setAttribute("data-theme", t); }
@@ -697,6 +722,49 @@ else {
 pg = panels.transactions;
 {
   const T = D.transactions;
+  const TS = D.transfer_suggestions;
+  if (TS) {
+    const STATUS = { i: "Injured", s: "Suspended", u: "Unavailable", d: "Doubtful" };
+    const chips = p => h("span", { class: "sg-fx" }, p.fixtures.map(f =>
+      h("span", { class: "sg-chip", title: `GW${f.gw}: ${f.opponent} (${f.home ? "H" : "A"}), difficulty ${f.difficulty ?? "?"}`,
+        style: f.difficulty ? `background:${fdrColor(f.difficulty)};color:${fdrInk(f.difficulty)}` : null }, f.difficulty ?? "–")));
+    const flag = p => {
+      if (!STATUS[p.status]) return null;
+      const label = p.status === "d" && p.chance != null ? `${p.chance}%` : STATUS[p.status];
+      return h("span", { class: `sg-flag ${p.status === "d" ? "warn" : "bad"}`, title: p.news || STATUS[p.status] }, label);
+    };
+    const playerRow = (p, kind) => h("div", { class: "sg-row" },
+      h("span", { class: `sg-tag ${kind}` }, kind === "in" ? "IN" : "OUT"),
+      h("div", { class: "sg-who" },
+        h("div", { class: "sg-name" }, h("b", {}, p.name), " ", h("span", { class: "sg-club" }, p.club), flag(p)),
+        h("div", { class: "sg-meta" },
+          [`form ${p.form.toFixed(1)}`, `${p.ppg.toFixed(1)} ppg`, `${fmt(p.minutes)} min`].flatMap((t, i) => [i ? " · " : null, h("span", { class: "nw" }, t)]),
+          p.news ? ` · ${p.news}` : null)),
+      chips(p));
+    const suggestion = s => h("div", { class: "sg" },
+      h("div", { class: "sg-head" }, h("span", { class: "sg-pos" }, s.pos), h("span", { class: "sg-gain" }, `+${s.gain.toFixed(1)}`),
+        h("span", { class: "sg-gain-note" }, `outlook ${s.add.outlook.toFixed(1)} vs ${s.drop.outlook.toFixed(1)}`)),
+      playerRow(s.add, "in"), playerRow(s.drop, "out"));
+
+    const sgHost = h("div", {});
+    let sgActive = ranked[0].entry_id;
+    const sgTabs = ranked.map(m => h("button", { type: "button", class: "teamtab", "aria-selected": "false",
+      onclick: () => { sgActive = m.entry_id; paintSuggestions(); } }, dot(m), nameOf(m)));
+    function paintSuggestions() {
+      ranked.forEach((m, i) => sgTabs[i].setAttribute("aria-selected", m.entry_id === sgActive ? "true" : "false"));
+      const list = TS.by_entry[sgActive] || [];
+      sgHost.textContent = "";
+      sgHost.append(list.length ? h("div", { class: "sg-list" }, list.map(suggestion))
+        : emptyMsg(`No free agent beats anyone in this squad by ${TS.min_gain} outlook point${TS.min_gain === 1 ? "" : "s"} or more right now.`));
+    }
+    paintSuggestions();
+    pg.append(card("Transfer suggestions",
+      `Like-for-like swaps for GW${TS.next_gw}: each team's weakest players against the best available free agents in the same position. Outlook = form (FPL's average points per game over the last 30 days), +1 for each step the next five fixtures are easier than average and −1 for each step harder. Injured and suspended free agents are left out; an unavailable squad player counts as 0. The coloured squares are the next five fixtures' difficulty (1 easiest, 5 hardest).`,
+      h("div", { class: "teamtabs", role: "tablist" }, sgTabs), sgHost,
+      h("p", { class: "sub sg-foot" }, "Make the move in the ",
+        h("a", { href: "https://draft.premierleague.com/", target: "_blank", rel: "noopener" }, "official FPL Draft app"),
+        TS.transaction_mode === "waivers" ? ". Your league uses waivers, so these go in as waiver claims." : ".")));
+  }
   const rows = ranked.map(m => ({ m, value: PM[m.entry_id].tx_accepted,
     note: `${PM[m.entry_id].tx_free_agent} free agent · ${PM[m.entry_id].tx_waiver} waiver · ${PM[m.entry_id].tx_denied} denied` }));
   const allG = D.rounds.map(r => r.gw);
@@ -1297,8 +1365,6 @@ pg.append(section("Fixtures"));
   if (!FT.length) {
     pg.append(emptyMsg("Fixture data isn't available yet."));
   } else {
-    const fdrColor = d => `var(--fdr-${d})`;
-    const fdrInk = d => (d === 2 || d === 3) ? "var(--h-ink-light)" : "var(--h-ink-dark)";
     const maxCols = Math.max(1, ...FT.map(t => t.fixtures.length));
     const included = Array.from({ length: maxCols }, () => true);
 
