@@ -14,26 +14,18 @@ WORKFLOW = (ROOT / ".github" / "workflows" / "update.yml").read_text(encoding="u
 
 
 class WorkflowScheduleTest(unittest.TestCase):
-    def test_cron_covers_all_ten_possible_utc_times(self):
-        # Each of 07:00/12:00/16:00/20:00/23:00 Danish time is one hour
-        # earlier in summer (CEST, UTC+2) than in winter (CET, UTC+1), so
-        # ten UTC cron slots are needed to cover all five year-round.
+    def test_cron_fires_roughly_every_few_hours(self):
         self.assertIn('cron: "0 5,6,10,11,14,15,18,19,21,22 * * *"', WORKFLOW)
 
-    def test_gate_step_checks_danish_local_time(self):
-        self.assertIn("TZ=Europe/Copenhagen", WORKFLOW)
-        self.assertIn("07|12|16|20|23) wanted=true ;;", WORKFLOW)
-
-    def test_off_hour_scheduled_runs_skip_the_rest_of_the_job(self):
-        self.assertIn("run=false", WORKFLOW)
-        self.assertIn("steps.gate.outputs.run == 'true'", WORKFLOW)
-        # Every real step after the gate must be conditional on it.
-        gated_steps = WORKFLOW.count("if: steps.gate.outputs.run == 'true'")
-        self.assertGreaterEqual(gated_steps, 6)
-
-    def test_gate_does_not_apply_to_manual_or_push_runs(self):
-        self.assertIn('github.event_name', WORKFLOW)
-        self.assertIn('"schedule"', WORKFLOW)
+    def test_no_local_time_gate_remains(self):
+        # GitHub's schedule delivery can run hours late, so an exact-hour
+        # local-time gate was silently skipping every run for days. There
+        # must be no such gate left: every scheduled firing attempts the
+        # real update, and the git-diff check makes a no-op run a no-op
+        # commit instead.
+        self.assertNotIn("TZ=Europe/Copenhagen", WORKFLOW)
+        self.assertNotIn("steps.gate.outputs.run", WORKFLOW)
+        self.assertNotIn("needs.update.outputs.run", WORKFLOW)
 
     def test_push_trigger_rebuilds_on_relevant_file_changes(self):
         self.assertIn("branches: [main]", WORKFLOW)
@@ -52,18 +44,15 @@ class WorkflowScheduleTest(unittest.TestCase):
     def test_pages_deploy_is_a_separate_job_gated_to_main_only(self):
         # The github-pages environment's branch protection applies to the
         # whole job that declares it, not just the deploy step -- so the
-        # data rebuild and digest send live in a job with no environment,
-        # and only the actual publish step sits behind the gate. That way
-        # "Run workflow" on a feature branch can still rebuild data and
-        # send a real digest for testing, without being able to publish to
-        # the live site.
+        # data rebuild and digest send live in a job with no environment.
+        # That way "Run workflow" on a feature branch can still rebuild data
+        # and send a real digest for testing, without being able to publish
+        # to the live site (the environment protection itself blocks that).
         update_job = WORKFLOW[WORKFLOW.index("\n  update:"):WORKFLOW.index("\n  deploy:")]
         deploy_job = WORKFLOW[WORKFLOW.index("\n  deploy:"):]
         self.assertNotIn("environment:", update_job)
         self.assertIn("needs: update", deploy_job)
         self.assertIn("name: github-pages", deploy_job)
-        self.assertIn("if: needs.update.outputs.run == 'true'", deploy_job)
-        self.assertIn("outputs:\n      run: ${{ steps.gate.outputs.run }}", update_job)
 
     def test_digest_step_runs_after_the_dashboard_data_is_already_saved(self):
         # The digest must never block the dashboard's own update/deploy, so
