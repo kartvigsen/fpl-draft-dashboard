@@ -14,18 +14,31 @@ WORKFLOW = (ROOT / ".github" / "workflows" / "update.yml").read_text(encoding="u
 
 
 class WorkflowScheduleTest(unittest.TestCase):
-    def test_cron_fires_roughly_every_few_hours(self):
-        self.assertIn('cron: "0 5,6,10,11,14,15,18,19,21,22 * * *"', WORKFLOW)
+    def test_cron_fires_every_ten_minutes(self):
+        self.assertIn('cron: "*/10 * * * *"', WORKFLOW)
 
-    def test_no_local_time_gate_remains(self):
+    def test_no_fixed_clock_time_gate(self):
         # GitHub's schedule delivery can run hours late, so an exact-hour
-        # local-time gate was silently skipping every run for days. There
-        # must be no such gate left: every scheduled firing attempts the
-        # real update, and the git-diff check makes a no-op run a no-op
-        # commit instead.
+        # local-time gate once silently skipped every run for days.
         self.assertNotIn("TZ=Europe/Copenhagen", WORKFLOW)
-        self.assertNotIn("steps.gate.outputs.run", WORKFLOW)
-        self.assertNotIn("needs.update.outputs.run", WORKFLOW)
+        self.assertNotIn("date +%H", WORKFLOW)
+
+    def test_scheduled_runs_are_gated_by_the_match_aware_check(self):
+        update_job = WORKFLOW[WORKFLOW.index("\n  update:"):WORKFLOW.index("\n  deploy:")]
+        gate = update_job[update_job.index("id: gate"):]
+        self.assertIn('if [ "${{ github.event_name }}" = "schedule" ]; then\n            python3 should_update.py >> "$GITHUB_OUTPUT"', gate)
+        self.assertIn('echo "run=true" >> "$GITHUB_OUTPUT"', gate)  # push and manual runs always update
+        # The gate needs the repo (fixtures, last build), so checkout comes first.
+        self.assertLess(update_job.index("actions/checkout@v4"), update_job.index("id: gate"))
+        def step_block(marker):
+            at = update_job.index(marker)
+            start = update_job.rindex("\n      - ", 0, at)
+            end = update_job.find("\n      - ", at)
+            return update_job[start:end if end != -1 else None]
+        for marker in ("setup-python", "python3 update.py", "Save new data", "send_digest.py",
+                       "configure-pages", "upload-pages-artifact"):
+            self.assertIn("if: steps.gate.outputs.run == 'true'", step_block(marker), marker)
+        self.assertIn("if: needs.update.outputs.run == 'true'", WORKFLOW[WORKFLOW.index("\n  deploy:"):])
 
     def test_push_trigger_rebuilds_on_relevant_file_changes(self):
         self.assertIn("branches: [main]", WORKFLOW)
