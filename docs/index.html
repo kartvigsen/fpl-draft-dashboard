@@ -188,7 +188,7 @@ details .tbl-wrap { margin-top: 8px; }
   box-shadow: 0 2px 6px rgba(0,0,0,.25); border: 0; font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
 .player-chip:hover, .player-chip:focus-visible { filter: brightness(1.04); }
-.player-chip.played { background: #dcf5e5; box-shadow: 0 2px 6px rgba(0,0,0,.25), inset 0 0 0 2px #1fa25b; }
+.player-chip:not(.played) { opacity: .5; box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); }
 .player-chip .nm { font-weight: 700; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .player-chip .cl { color: #6b6a65; font-size: 10px; }
 .player-chip .pt { font-size: 16px; font-weight: 800; margin: 3px 0 1px; }
@@ -1130,7 +1130,7 @@ pg.append(section("Live round"));
         h("p", { class: "sub" }, "Bench"), h("div", { class: "bench-row" }, t.bench.map(chip))));
     }
     paintPitch();
-    pg.append(card("Team lineups", "Captain (C) and vice-captain (V) are marked; green players have played this round. Click a team to switch, or a player for their full stats.",
+    pg.append(card("Team lineups", "Captain (C) and vice-captain (V) are marked; faded players haven't played this round (yet). Click a team to switch, or a player for their full stats.",
       h("div", { class: "teamtabs", role: "tablist" }, tabs), pitchHost), modalBackdrop);
 
     const LIM = 20;
