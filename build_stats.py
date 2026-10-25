@@ -122,6 +122,13 @@ def build(raw=RAW, now=None):
         else:
             team_fx[gw] = None
 
+    def match_over(gw, e):
+        fx = team_fx.get(gw)
+        if fx is None:
+            return True
+        return all(f.get("finished") or f.get("finished_provisional")
+                   for f in fx.get(elem_team.get(e), []))
+
     def provisional_subs(xi, bench, gw):
         """The draft API only fills in "subs" once a gameweek is final, so a
         round still in progress needs its own provisional read of the same
@@ -136,23 +143,15 @@ def build(raw=RAW, now=None):
         still come on) rather than being skipped.
         """
         minutes_map = mins.get(gw, {})
-        fx = team_fx.get(gw)
         is_gk = lambda e: players.get(e, {}).get("pos") == "GKP"
         played = lambda e: minutes_map.get(e, 0) > 0
-
-        def match_over(e):
-            if fx is None:
-                return True
-            return all(f.get("finished") or f.get("finished_provisional")
-                       for f in fx.get(elem_team.get(e), []))
-
-        didnt_play = lambda e: not played(e) and match_over(e)
+        didnt_play = lambda e: not played(e) and match_over(gw, e)
 
         def next_sub(candidates):
             for e in candidates:
                 if played(e):
                     return e
-                if not match_over(e):
+                if not match_over(gw, e):
                     return None
             return None
 
@@ -332,6 +331,13 @@ def build(raw=RAW, now=None):
                         bn[bn.index(in_)] = out_
             else:
                 xi, bn = provisional_subs(xi, bn, cur)
+            # A bench outfielder whose match is over with 0 minutes can no
+            # longer come on, so they drop behind everyone who still can.
+            # The keeper keeps the first bench slot (they only cover a keeper).
+            done_blank = lambda e: not mins.get(cur, {}).get(e, 0) and match_over(cur, e)
+            bn_gk = [e for e in bn if players.get(e, {}).get("pos") == "GKP"]
+            bn_out = [e for e in bn if e not in bn_gk]
+            bn = bn_gk + [e for e in bn_out if not done_blank(e)] + [e for e in bn_out if done_blank(e)]
             flags = {p["element"]: p for p in picks}
 
             def squad_row(el, flags=flags):
