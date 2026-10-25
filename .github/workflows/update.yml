@@ -2,11 +2,13 @@ name: Update dashboard
 
 on:
   schedule:
-    # Denmark is UTC+1 (CET, winter) or UTC+2 (CEST, summer), and GitHub
-    # Actions schedules are always UTC, so we list both possible UTC times
-    # for each of 07:00/12:00/16:00/20:00/23:00 Danish time. The "Check
-    # Danish local time" step below works out which five of these ten runs
-    # actually matter and lets the other five exit immediately.
+    # Runs roughly every 1.5-3 hours. We used to also gate each firing on
+    # the current Danish local time (only continuing at 07:00/12:00/16:00/
+    # 20:00/23:00) to cut this down to ~5 real runs/day, but GitHub's
+    # schedule delivery can run hours late, so that exact-hour check was
+    # silently skipping every single run for days. The git-diff check in
+    # "Save new data to the repository" already makes a no-op run a no-op
+    # commit, so there's no need for the extra gate.
     - cron: "0 5,6,10,11,14,15,18,19,21,22 * * *"
   push:
     branches: [main]
@@ -30,38 +32,17 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    outputs:
-      run: ${{ steps.gate.outputs.run }}
     steps:
-      - name: Check Danish local time
-        id: gate
-        run: |
-          hour=$(TZ=Europe/Copenhagen date +%H)
-          case "$hour" in
-            07|12|16|20|23) wanted=true ;;
-            *) wanted=false ;;
-          esac
-          if [ "${{ github.event_name }}" = "schedule" ] && [ "$wanted" = "false" ]; then
-            echo "It's $hour:00 in Denmark, not 07:00, 12:00, 16:00, 20:00 or 23:00 - skipping this scheduled run."
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          fi
-
       - uses: actions/checkout@v4
-        if: steps.gate.outputs.run == 'true'
 
       - uses: actions/setup-python@v5
-        if: steps.gate.outputs.run == 'true'
         with:
           python-version: "3.12"
 
       - name: Download data and rebuild the dashboard
-        if: steps.gate.outputs.run == 'true'
         run: python3 update.py
 
       - name: Save new data to the repository
-        if: steps.gate.outputs.run == 'true'
         run: |
           git config user.name "fpl-dashboard-bot"
           git config user.email "actions@users.noreply.github.com"
@@ -74,7 +55,6 @@ jobs:
           fi
 
       - name: Send the weekly digest, if a new gameweek just finished
-        if: steps.gate.outputs.run == 'true'
         continue-on-error: true   # a digest/email hiccup must never block the dashboard update or deploy above
         env:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
@@ -91,10 +71,8 @@ jobs:
           fi
 
       - uses: actions/configure-pages@v5
-        if: steps.gate.outputs.run == 'true'
 
       - uses: actions/upload-pages-artifact@v3
-        if: steps.gate.outputs.run == 'true'
         with:
           path: docs
 
@@ -104,7 +82,6 @@ jobs:
   # tested (e.g. via "Run workflow") from any branch.
   deploy:
     needs: update
-    if: needs.update.outputs.run == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
