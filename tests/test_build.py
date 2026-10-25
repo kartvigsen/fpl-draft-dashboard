@@ -503,7 +503,7 @@ class ProvisionalAutoSubTest(unittest.TestCase):
             live_path.write_text(json.dumps(live))
             d = build_stats.build(tmp)
             team = d["current_round"]["teams"][0]
-            return ({p["name"] for p in team["xi"]}, {p["name"] for p in team["bench"]},
+            return ([p["name"] for p in team["xi"]], [p["name"] for p in team["bench"]],
                     d["rounds"][0]["scores"]["201"])
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
@@ -537,6 +537,13 @@ class ProvisionalAutoSubTest(unittest.TestCase):
         self.assertIn("BlankMidA", bench)
         self.assertIn("UsableSub", xi)
         self.assertEqual(score, 12 + 9)
+
+    def test_bench_players_who_can_no_longer_come_on_drop_to_the_back(self):
+        # BlankSubA's match is over with 0 minutes, so they can't come on any
+        # more; BlankSubB (match pending) and UsableSub keep their order ahead
+        # of them. The keeper always keeps the first bench slot.
+        xi, bench, _ = self.lineup_with_fixtures({14: 2}, [self.TEAM1_DONE, self.TEAM2_PENDING])
+        self.assertEqual(bench, ["BenchKeeper", "BlankSubB", "UsableSub", "BlankSubA"])
 
     def test_official_subs_from_the_api_are_still_preferred_once_present(self):
         # Once the gameweek is finished, the draft API provides its own

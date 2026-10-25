@@ -216,12 +216,22 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn("flex: 0 1 19%", HTML)
 
     def test_live_round_player_chip_opens_a_modal_with_full_stats(self):
-        self.assertIn('class: "player-chip", onclick: () => openPlayerModal(p)', HTML)
+        self.assertIn('onclick: () => openPlayerModal(p)', HTML)
         self.assertIn("function openPlayerModal(p)", HTML)
         self.assertIn('class: "modal-backdrop"', HTML)
         self.assertIn('statRow("Minutes"', HTML)
         self.assertIn('statRow("Defensive contribution"', HTML)
         self.assertIn('ev.key === "Escape"', HTML)
+
+    def test_live_round_highlights_players_who_have_played(self):
+        self.assertIn('class: p.minutes > 0 ? "player-chip played" : "player-chip"', HTML)
+        self.assertIn(".player-chip.played {", HTML)
+
+    def test_live_round_pitch_has_score_and_played_count_corner_boxes(self):
+        self.assertIn('class: "pitch-box l", title: "Round score"', HTML)
+        self.assertIn("const playedCount = t.xi.filter(p => p.minutes > 0).length;", HTML)
+        self.assertIn("`${playedCount}/${t.xi.length}`", HTML)
+        self.assertNotIn("Round score: ${", HTML)
 
     def test_live_round_tab_has_a_team_switcher(self):
         self.assertIn('class: "teamtab"', HTML)
