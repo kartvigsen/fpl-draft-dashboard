@@ -40,7 +40,13 @@ The `docs/` folder is a complete static site (`index.html` and `data.js`). Optio
 - **GitHub Pages:** put this project in a GitHub repository and serve the `docs/` folder. Note that a Pages site is public to anyone with the link, and it contains your friends' names and team names.
 - **Just send it:** zip `docs/` and share it, or drop it on any file host.
 
-If you use the included `.github/workflows/update.yml`, the dashboard rebuilds itself automatically roughly every 1.5-3 hours, and also whenever `docs/index.html`, a top-level `.py` file, `config.json` or the workflow file changes on `main`. A run that finds nothing new simply makes no commit, so there's no harm in it firing often. You can still trigger it manually from the Actions tab ("Run workflow").
+If you use the included `.github/workflows/update.yml`, the dashboard follows matches as they happen. The workflow wakes every 10 minutes, and `should_update.py` decides whether that run does a real update:
+
+- a Premier League match kicked off in the last 2.5 hours, or is still in progress (weekend or midweek, it goes by real kickoff times);
+- or the data is more than 3 hours old, so injuries, news, waivers and free agents stay fresh on days without games;
+- or code changed on `main` since the last build.
+
+Otherwise the run stops after a few seconds. It also rebuilds whenever `docs/index.html`, a top-level `.py` file, `config.json` or the workflow file changes on `main`. GitHub's schedule is best-effort and can run late on busy days, so "every 10 minutes" is a target, not a guarantee. You can still trigger it manually from the Actions tab ("Run workflow").
 
 **Add to Home Screen:** the site is installable as an app icon on phones (`docs/manifest.json`, `docs/icons/`, `docs/sw.js`). On iOS, open the site in Safari and use Share → "Add to Home Screen"; on Android/Chrome, use the browser menu's "Install app" / "Add to Home screen". It opens without browser chrome and uses the site's blue bar-chart icon.
 

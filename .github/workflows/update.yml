@@ -2,14 +2,12 @@ name: Update dashboard
 
 on:
   schedule:
-    # Runs roughly every 1.5-3 hours. We used to also gate each firing on
-    # the current Danish local time (only continuing at 07:00/12:00/16:00/
-    # 20:00/23:00) to cut this down to ~5 real runs/day, but GitHub's
-    # schedule delivery can run hours late, so that exact-hour check was
-    # silently skipping every single run for days. The git-diff check in
-    # "Save new data to the repository" already makes a no-op run a no-op
-    # commit, so there's no need for the extra gate.
-    - cron: "0 5,6,10,11,14,15,18,19,21,22 * * *"
+    # Every 10 minutes; should_update.py lets a run do the real work only
+    # while a match is on or just finished (any day of the week), when the
+    # data is over 3 hours old, or when code changed since the last build.
+    # No fixed clock times: GitHub's schedule can run hours late, which
+    # once made an exact-hour check skip every run for days.
+    - cron: "*/10 * * * *"
   push:
     branches: [main]
     paths:
@@ -32,17 +30,31 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
     steps:
       - uses: actions/checkout@v4
 
+      - name: Decide whether to update
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            python3 should_update.py >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/setup-python@v5
+        if: steps.gate.outputs.run == 'true'
         with:
           python-version: "3.12"
 
       - name: Download data and rebuild the dashboard
+        if: steps.gate.outputs.run == 'true'
         run: python3 update.py
 
       - name: Save new data to the repository
+        if: steps.gate.outputs.run == 'true'
         run: |
           git config user.name "fpl-dashboard-bot"
           git config user.email "actions@users.noreply.github.com"
@@ -55,6 +67,7 @@ jobs:
           fi
 
       - name: Send the weekly digest, if a new gameweek just finished
+        if: steps.gate.outputs.run == 'true'
         continue-on-error: true   # a digest/email hiccup must never block the dashboard update or deploy above
         env:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
@@ -71,8 +84,10 @@ jobs:
           fi
 
       - uses: actions/configure-pages@v5
+        if: steps.gate.outputs.run == 'true'
 
       - uses: actions/upload-pages-artifact@v3
+        if: steps.gate.outputs.run == 'true'
         with:
           path: docs
 
@@ -82,6 +97,7 @@ jobs:
   # tested (e.g. via "Run workflow") from any branch.
   deploy:
     needs: update
+    if: needs.update.outputs.run == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
