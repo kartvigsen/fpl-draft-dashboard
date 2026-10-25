@@ -225,7 +225,10 @@ class HomeScreenInstallTest(unittest.TestCase):
 
     def test_live_round_highlights_players_who_have_played(self):
         self.assertIn('class: p.minutes > 0 ? "player-chip played" : "player-chip"', HTML)
-        self.assertIn(".player-chip.played {", HTML)
+        # On a green pitch, a green "played" tint is hard to see, so the
+        # players who haven't played are faded instead.
+        self.assertIn(".player-chip:not(.played) { opacity: .5; box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); }", HTML)
+        self.assertNotIn(".player-chip.played {", HTML)
 
     def test_live_round_pitch_has_score_and_played_count_corner_boxes(self):
         self.assertIn('class: "pitch-box l", title: "Round score"', HTML)
