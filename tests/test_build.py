@@ -487,6 +487,57 @@ class ProvisionalAutoSubTest(unittest.TestCase):
         # stays at 0 -- only the outfield sub still applies.
         self.assertEqual(self.score(keeper_minutes=0, bench_keeper_minutes=0), 0 + 6 + 9 + 4)
 
+    def lineup_with_fixtures(self, team_of, fixtures):
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            write_auto_sub_fixture(tmp)
+            boot_path = tmp / "bootstrap.json"
+            boot = json.loads(boot_path.read_text())
+            for el in boot["elements"]:
+                el["team"] = team_of.get(el["id"], 1)
+            boot["teams"] += [{"id": t, "short_name": f"T{t}"} for t in (2, 3, 4, 5)]
+            boot_path.write_text(json.dumps(boot))
+            live_path = tmp / "live" / "gw1.json"
+            live = json.loads(live_path.read_text())
+            live["fixtures"] = fixtures
+            live_path.write_text(json.dumps(live))
+            d = build_stats.build(tmp)
+            team = d["current_round"]["teams"][0]
+            return ({p["name"] for p in team["xi"]}, {p["name"] for p in team["bench"]},
+                    d["rounds"][0]["scores"]["201"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    # Saturday's real matches were finished_provisional (bonus still pending)
+    # but not yet "finished" -- that must already count as over.
+    TEAM1_DONE = {"team_h": 1, "team_a": 4, "started": True, "finished": False, "finished_provisional": True}
+    TEAM2_PENDING = {"team_h": 2, "team_a": 3, "started": False, "finished": False, "finished_provisional": False}
+
+    def test_a_starter_whose_match_has_not_been_played_is_not_subbed_out(self):
+        # BlankMidA's team hasn't kicked off yet, so their 0 minutes mean
+        # nothing yet; only BlankMidB (match over, 0 minutes) is replaced.
+        xi, bench, score = self.lineup_with_fixtures({3: 2}, [self.TEAM1_DONE, self.TEAM2_PENDING])
+        self.assertIn("BlankMidA", xi)
+        self.assertIn("UsableSub", xi)
+        self.assertIn("BlankMidB", bench)
+        self.assertEqual(score, 12 + 9)
+
+    def test_a_bench_player_whose_match_is_pending_blocks_the_queue(self):
+        # BlankSubA (bench 1) may still come on later, so UsableSub (bench 3)
+        # can't be brought on ahead of them yet.
+        xi, bench, score = self.lineup_with_fixtures({13: 2}, [self.TEAM1_DONE, self.TEAM2_PENDING])
+        self.assertIn("UsableSub", bench)
+        self.assertIn("BlankMidA", xi)
+        self.assertIn("BlankMidB", xi)
+        self.assertEqual(score, 12)
+
+    def test_a_starter_whose_team_has_no_fixture_this_gameweek_is_subbed_out(self):
+        # No fixture at all means they certainly won't play.
+        xi, bench, score = self.lineup_with_fixtures({3: 5}, [self.TEAM1_DONE])
+        self.assertIn("BlankMidA", bench)
+        self.assertIn("UsableSub", xi)
+        self.assertEqual(score, 12 + 9)
+
     def test_official_subs_from_the_api_are_still_preferred_once_present(self):
         # Once the gameweek is finished, the draft API provides its own
         # authoritative "subs" -- build_stats must use that instead of

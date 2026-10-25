@@ -102,8 +102,10 @@ def build(raw=RAW, now=None):
         return {"id": eid_, **info}
 
     # ---- live points per gameweek --------------------------------------
+    elem_team = {p["id"]: p.get("team") for p in boot.get("elements", [])}
     pp = {}      # gw -> {element: points}
     mins = {}    # gw -> {element: minutes played}
+    team_fx = {}  # gw -> {team id: [fixtures]}, or None if the live file has no fixtures
     for gw in started_gws:
         live = _load(raw / "live" / f"gw{gw}.json", {}) or {}
         elems = live.get("elements", {}) or {}
@@ -111,24 +113,57 @@ def build(raw=RAW, now=None):
                   for k, v in elems.items()}
         mins[gw] = {int(k): (v.get("stats", {}) or {}).get("minutes", 0) or 0
                     for k, v in elems.items()}
+        if "fixtures" in live:
+            by_team = {}
+            for f in live.get("fixtures") or []:
+                for t in (f.get("team_h"), f.get("team_a")):
+                    by_team.setdefault(t, []).append(f)
+            team_fx[gw] = by_team
+        else:
+            team_fx[gw] = None
 
-    def provisional_subs(xi, bench, minutes_map):
+    def provisional_subs(xi, bench, gw):
         """The draft API only fills in "subs" once a gameweek is final, so a
         round still in progress needs its own provisional read of the same
         rule: a starting player with 0 minutes is covered by the next bench
         player (in bench order) who actually played -- a keeper only ever
         covers a keeper. This doesn't check formation validity, which the
         real rule does, but matches it for the common case.
+
+        0 minutes only means "didn't play" once the player's match is over,
+        so a starter whose match hasn't finished is never subbed out, and a
+        bench player whose match hasn't finished blocks the queue (they may
+        still come on) rather than being skipped.
         """
+        minutes_map = mins.get(gw, {})
+        fx = team_fx.get(gw)
         is_gk = lambda e: players.get(e, {}).get("pos") == "GKP"
-        gk_out = next((e for e in xi if is_gk(e) and minutes_map.get(e, 0) == 0), None)
-        gk_in = next((e for e in bench if is_gk(e) and minutes_map.get(e, 0) > 0), None)
+        played = lambda e: minutes_map.get(e, 0) > 0
+
+        def match_over(e):
+            if fx is None:
+                return True
+            return all(f.get("finished") or f.get("finished_provisional")
+                       for f in fx.get(elem_team.get(e), []))
+
+        didnt_play = lambda e: not played(e) and match_over(e)
+
+        def next_sub(candidates):
+            for e in candidates:
+                if played(e):
+                    return e
+                if not match_over(e):
+                    return None
+            return None
+
+        gk_out = next((e for e in xi if is_gk(e) and didnt_play(e)), None)
+        gk_in = next_sub([e for e in bench if is_gk(e)])
         if gk_out and gk_in:
             xi[xi.index(gk_out)] = gk_in
             bench[bench.index(gk_in)] = gk_out
         bench_outfield = [e for e in bench if not is_gk(e)]
-        for out_ in [e for e in xi if not is_gk(e) and minutes_map.get(e, 0) == 0]:
-            in_ = next((e for e in bench_outfield if minutes_map.get(e, 0) > 0), None)
+        for out_ in [e for e in xi if not is_gk(e) and didnt_play(e)]:
+            in_ = next_sub(bench_outfield)
             if in_ is None:
                 continue
             xi[xi.index(out_)] = in_
@@ -164,7 +199,7 @@ def build(raw=RAW, now=None):
                         xi[xi.index(out_)] = in_
                         bench[bench.index(in_)] = out_
             else:
-                xi, bench = provisional_subs(xi, bench, mins.get(gw, {}))
+                xi, bench = provisional_subs(xi, bench, gw)
             pts_map = pp.get(gw, {})
             comp = sum(pts_map.get(e, 0) for e in xi)
             computed[gw][eid] = comp
@@ -296,7 +331,7 @@ def build(raw=RAW, now=None):
                         xi[xi.index(out_)] = in_
                         bn[bn.index(in_)] = out_
             else:
-                xi, bn = provisional_subs(xi, bn, mins.get(cur, {}))
+                xi, bn = provisional_subs(xi, bn, cur)
             flags = {p["element"]: p for p in picks}
 
             def squad_row(el, flags=flags):
