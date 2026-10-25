@@ -236,6 +236,25 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn("`${playedCount}/${t.xi.length}`", HTML)
         self.assertNotIn("Round score: ${", HTML)
 
+    def test_transactions_tab_has_transfer_suggestions_with_a_team_switcher(self):
+        start = HTML.index("/* transactions */")
+        block = HTML[start:HTML.index("const rows = ranked.map", start)]
+        self.assertIn("const TS = D.transfer_suggestions;", block)
+        self.assertIn('card("Transfer suggestions"', block)
+        self.assertIn("sgActive = m.entry_id; paintSuggestions();", block)
+        self.assertIn('kind === "in" ? "IN" : "OUT"', block)
+        self.assertIn("fdrColor(f.difficulty)", block)
+        self.assertIn('href: "https://draft.premierleague.com/", target: "_blank", rel: "noopener"', block)
+
+    def test_suggestion_cards_never_overflow_a_phone_screen(self):
+        # A grid track grows to fit unwrapped text (a long injury note)
+        # unless it's explicitly allowed to shrink.
+        self.assertIn(".sg-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }", HTML)
+
+    def test_fdr_colour_helpers_are_shared_not_redeclared(self):
+        self.assertEqual(HTML.count("const fdrColor = d =>"), 1)
+        self.assertEqual(HTML.count("const fdrInk = d =>"), 1)
+
     def test_live_round_tab_has_a_team_switcher(self):
         self.assertIn('class: "teamtab"', HTML)
         self.assertIn("activeEntryId = m.entry_id", HTML)

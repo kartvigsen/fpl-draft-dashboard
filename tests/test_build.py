@@ -893,6 +893,90 @@ def write_all_players_fixture(root):
     })
 
 
+class TransferSuggestionsTest(unittest.TestCase):
+    """Like-for-like swaps: a manager's weakest players vs the best free
+    agents in the same position, ranked by form adjusted for the next five
+    fixtures (from the next gameweek on)."""
+
+    def el(self, id_, pos, team=1, form="0.0", status="a", minutes=900, **extra):
+        return {"id": id_, "web_name": f"P{id_}", "element_type": pos, "team": team,
+                "form": form, "status": status, "minutes": minutes, "points_per_game": "4.0",
+                "chance_of_playing_next_round": extra.get("chance"), "news": extra.get("news", "")}
+
+    def run_suggest(self, elements, owners, fixtures=(), in_trade=(), next_gw=9):
+        teams = {1: "AAA", 2: "BBB", 3: "CCC"}
+        classic = [{"id": 11, "short_name": "AAA"}, {"id": 12, "short_name": "BBB"}, {"id": 13, "short_name": "CCC"}]
+        status_list = [{"element": e["id"], "owner": owners.get(e["id"]), "in_accepted_trade": e["id"] in in_trade}
+                       for e in elements]
+        return build_stats._transfer_suggestions(
+            {"elements": elements}, teams, status_list, dict(owners), [100], classic, list(fixtures),
+            next_gw=next_gw, points_per_game=lambda p: float(p["points_per_game"]), transaction_mode="waivers")
+
+    def test_pairs_weakest_with_best_in_the_same_position_only(self):
+        els = [self.el(1, 3, form="1.0"), self.el(2, 3, form="4.0"),  # my mids: weakest first
+               self.el(3, 2, form="0.5"),                            # my def
+               self.el(10, 3, form="6.0"), self.el(11, 3, form="4.5"),  # free-agent mids
+               self.el(12, 4, form="9.0")]                           # a great free-agent forward
+        s = self.run_suggest(els, {1: 100, 2: 100, 3: 100})["by_entry"]["100"]
+        pairs = [(x["add"]["id"], x["drop"]["id"], x["gain"]) for x in s]
+        # 6.0 vs 1.0 and nothing else: 4.5 vs 4.0 is under the 1-point bar,
+        # and the forward can't replace a midfielder or defender.
+        self.assertEqual(pairs, [(10, 1, 5.0)])
+
+    def test_unavailable_or_thin_free_agents_are_never_suggested(self):
+        els = [self.el(1, 3, form="1.0"),
+               self.el(10, 3, form="9.0", status="i"), self.el(11, 3, form="8.0", status="s"),
+               self.el(12, 3, form="8.0", status="u"), self.el(13, 3, form="8.0", minutes=90),
+               self.el(14, 3, form="7.0"), self.el(15, 3, form="7.5")]
+        owners = {1: 100, 15: 200}  # 15 is someone else's player
+        s = self.run_suggest(els, owners, in_trade={14})["by_entry"]["100"]
+        self.assertEqual(s, [])
+
+    def test_doubtful_free_agents_are_shown_with_their_chance_and_news(self):
+        els = [self.el(1, 3, form="1.0"), self.el(10, 3, form="6.0", status="d", chance=75, news="Knock")]
+        add = self.run_suggest(els, {1: 100})["by_entry"]["100"][0]["add"]
+        self.assertEqual((add["status"], add["chance"], add["news"]), ("d", 75, "Knock"))
+
+    def test_an_unavailable_squad_player_counts_as_zero_and_goes_first(self):
+        els = [self.el(1, 3, form="6.0", status="i", news="Thigh injury"), self.el(2, 3, form="3.0"),
+               self.el(10, 3, form="5.0")]
+        s = self.run_suggest(els, {1: 100, 2: 100})["by_entry"]["100"]
+        # One free agent, so one swap -- and it replaces the injured player
+        # (form 6.0, counted as 0), not the fit one on form 3.0.
+        self.assertEqual([(x["drop"]["id"], x["drop"]["outlook"]) for x in s], [(1, 0.0)])
+
+    def test_outlook_adds_one_per_step_easier_fixtures_from_next_gameweek(self):
+        def fx(gw, h, a, hd, ad):
+            return {"event": gw, "team_h": h, "team_a": a, "team_h_difficulty": hd, "team_a_difficulty": ad}
+        fixtures = [fx(8, 11, 12, 5, 5),   # this gameweek -- ignored
+                    fx(9, 11, 13, 2, 4), fx(10, 13, 11, 4, 2)]  # AAA: 2 and 2 -> avg 2, +1
+        els = [self.el(1, 3, team=2, form="1.0"), self.el(10, 3, team=1, form="5.0")]
+        s = self.run_suggest(els, {1: 100}, fixtures=fixtures)["by_entry"]["100"][0]
+        self.assertEqual(s["add"]["avg_fdr"], 2.0)
+        self.assertEqual(s["add"]["outlook"], 6.0)
+        self.assertEqual([f["opponent"] for f in s["add"]["fixtures"]], ["CCC", "CCC"])
+        self.assertEqual([f["home"] for f in s["add"]["fixtures"]], [True, False])
+        self.assertIsNone(s["drop"]["avg_fdr"])  # no upcoming fixtures: no adjustment
+        self.assertEqual(s["drop"]["outlook"], 1.0)
+
+    def test_at_most_six_suggestions_best_first(self):
+        els = [self.el(i, 2, form="0.0") for i in range(1, 6)] + [self.el(i, 3, form="0.0") for i in range(6, 11)]
+        els += [self.el(20 + i, 2, form=str(2 + i)) for i in range(5)] + [self.el(30 + i, 3, form=str(3 + i)) for i in range(5)]
+        s = self.run_suggest(els, {i: 100 for i in range(1, 11)})["by_entry"]["100"]
+        self.assertEqual(len(s), 6)
+        self.assertEqual([x["gain"] for x in s], sorted((x["gain"] for x in s), reverse=True))
+
+    def test_build_includes_suggestions_for_every_manager(self):
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            write_auto_sub_fixture(tmp)
+            d = build_stats.build(tmp)
+            self.assertEqual(set(d["transfer_suggestions"]["by_entry"]), {"201"})
+            self.assertEqual(d["transfer_suggestions"]["next_gw"], 2)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
 class AllPlayersTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())

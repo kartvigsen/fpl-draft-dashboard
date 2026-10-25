@@ -394,6 +394,11 @@ def build(raw=RAW, now=None):
             "fixtures": rows,
         })
 
+    transfer_suggestions = _transfer_suggestions(
+        boot, teams, status_list, owner_by_element, eids, classic_teams, fixtures_raw,
+        next_gw=cur + 1, points_per_game=points_per_game,
+        transaction_mode=(details.get("league") or {}).get("transaction_mode"))
+
     cum, rank_by_gw = {e: [] for e in eids}, {e: [] for e in eids}
     running = {e: 0 for e in eids}
     for gw in complete:
@@ -679,8 +684,103 @@ def build(raw=RAW, now=None):
         "all_players": all_players,
         "current_round": current_round,
         "fixtures_by_team": fixtures_by_team,
+        "transfer_suggestions": transfer_suggestions,
         "checks": checks,
     }
+
+
+SUGGEST_UNAVAILABLE = {"i", "s", "u"}   # injured, suspended, unavailable (e.g. left the league)
+SUGGEST_MIN_MINUTES = 180               # filters out one-off cameos with an inflated form
+SUGGEST_MIN_GAIN = 1.0
+SUGGEST_MAX_PER_ENTRY = 6
+
+
+def _float(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _transfer_suggestions(boot, teams, status_list, owner_by_element, eids, classic_teams,
+                          fixtures_raw, next_gw, points_per_game, transaction_mode):
+    """Like-for-like swaps (a draft squad keeps its 2/5/5/3 shape): each
+    manager's weakest players against the best available free agents in the
+    same position. "Outlook" is FPL form, plus one point per step the next
+    five fixtures (from the next gameweek on, when a move takes effect) are
+    easier than an average difficulty of 3, minus one per step harder. An
+    unavailable player's outlook is 0, so they come up first as a drop.
+    """
+    classic_id_by_short = {t.get("short_name"): t["id"] for t in classic_teams if t.get("id") is not None}
+    classic_short = {t["id"]: t.get("short_name", "?") for t in classic_teams if t.get("id") is not None}
+
+    def next_fixtures(draft_team_id):
+        cid = classic_id_by_short.get(teams.get(draft_team_id))
+        if cid is None:
+            return []
+        own = sorted((f for f in fixtures_raw
+                      if (f.get("event") or 0) >= next_gw and cid in (f.get("team_h"), f.get("team_a"))),
+                     key=lambda f: (f.get("event"), f.get("kickoff_time") or ""))[:5]
+        rows = []
+        for f in own:
+            home = f.get("team_h") == cid
+            rows.append({"gw": f.get("event"), "home": home,
+                         "opponent": classic_short.get(f.get("team_a") if home else f.get("team_h"), "?"),
+                         "difficulty": f.get("team_h_difficulty") if home else f.get("team_a_difficulty")})
+        return rows
+
+    fx_cache = {}
+    rows = {}
+    for p in boot.get("elements", []):
+        tid = p.get("team")
+        if tid not in fx_cache:
+            fx_cache[tid] = next_fixtures(tid)
+        fx = fx_cache[tid]
+        diffs = [r["difficulty"] for r in fx if isinstance(r["difficulty"], (int, float))]
+        avg_fdr = round(sum(diffs) / len(diffs), 1) if diffs else None
+        status = p.get("status") or "a"
+        form = round(_float(p.get("form")), 1)
+        outlook = 0.0 if status in SUGGEST_UNAVAILABLE else form + (3 - avg_fdr if avg_fdr is not None else 0)
+        rows[p["id"]] = {
+            "id": p["id"],
+            "name": p.get("web_name") or p.get("second_name") or str(p["id"]),
+            "club": teams.get(tid, ""),
+            "pos": POS.get(p.get("element_type"), "?"),
+            "form": form,
+            "ppg": points_per_game(p),
+            "minutes": p.get("minutes", 0) or 0,
+            "status": status,
+            "chance": p.get("chance_of_playing_next_round"),
+            "news": p.get("news") or "",
+            "avg_fdr": avg_fdr,
+            "fixtures": fx,
+            "outlook": round(outlook, 1),
+        }
+
+    in_trade = {s["element"] for s in status_list if s.get("in_accepted_trade")}
+    free_agents = [r for el, r in rows.items()
+                   if el not in owner_by_element and el not in in_trade
+                   and r["status"] not in SUGGEST_UNAVAILABLE and r["minutes"] >= SUGGEST_MIN_MINUTES]
+    best_by_pos = {}
+    for r in sorted(free_agents, key=lambda r: (-r["outlook"], -r["form"], r["name"])):
+        best_by_pos.setdefault(r["pos"], []).append(r)
+
+    by_entry = {}
+    for eid in eids:
+        squad = [rows[el] for el, owner in owner_by_element.items() if owner == eid and el in rows]
+        found = []
+        for pos in POS.values():
+            weakest = sorted((r for r in squad if r["pos"] == pos), key=lambda r: (r["outlook"], r["form"], r["name"]))
+            for drop, add in zip(weakest, best_by_pos.get(pos, [])):
+                gain = round(add["outlook"] - drop["outlook"], 1)
+                if gain < SUGGEST_MIN_GAIN:
+                    break  # weakest go up and best go down, so no later pair can do better
+                found.append({"pos": pos, "add": add, "drop": drop, "gain": gain})
+        found.sort(key=lambda s: (-s["gain"], s["add"]["name"]))
+        by_entry[str(eid)] = found[:SUGGEST_MAX_PER_ENTRY]
+
+    return {"next_gw": next_gw, "transaction_mode": transaction_mode,
+            "min_gain": SUGGEST_MIN_GAIN, "by_entry": by_entry}
 
 
 def write(data, docs=DOCS):
