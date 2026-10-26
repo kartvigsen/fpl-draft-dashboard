@@ -1137,6 +1137,7 @@ pg.append(section("Live round"));
     const statLine = p => {
       const parts = [];
       if (p.minutes) parts.push(`${p.minutes}'`);
+      if (p.bonus) parts.push(`${p.bonus}B`);  // early, so a narrow chip never cuts it off
       if (p.goals_scored) parts.push(`${p.goals_scored}G`);
       if (p.assists) parts.push(`${p.assists}A`);
       if (p.clean_sheets) parts.push("CS");
@@ -1158,10 +1159,11 @@ pg.append(section("Live round"));
         h("button", { type: "button", class: "ghost", style: "float:right", onclick: closeModal }, "Close"),
         h("h3", {}, p.name), h("p", { class: "sub" }, `${p.team} · ${p.pos}${role}`),
         h("p", { class: "pts" }, `${fmt(p.points)} pts`),
+        p.bonus ? h("p", { class: "sub", style: "margin:-4px 0 12px" }, `incl. ${fmt(p.bonus)} bonus`) : null,
         h("dl", { class: "modal-stats" },
           statRow("Minutes", fmt(p.minutes)), statRow("Goals", fmt(p.goals_scored)),
           statRow("Assists", fmt(p.assists)), statRow("Clean sheet", p.clean_sheets ? "Yes" : "No"),
-          statRow("Defensive contribution", fmt(p.defensive_contribution))));
+          statRow("Defensive contribution", fmt(p.defensive_contribution)), statRow("Bonus", fmt(p.bonus))));
       modalBackdrop.hidden = false;
     }
     const chip = p => h("button", { type: "button", class: p.minutes > 0 ? "player-chip played" : "player-chip", onclick: () => openPlayerModal(p) },
@@ -1224,6 +1226,7 @@ pg.append(section("Live round"));
       { key: "assists", label: "Assists", num: true, get: p => p.assists },
       { key: "clean_sheets", label: "CS", num: true, get: p => p.clean_sheets },
       { key: "defensive_contribution", label: "DEFCON", num: true, get: p => p.defensive_contribution },
+      { key: "bonus", label: "Bonus", num: true, get: p => p.bonus },
     ];
     const sorter = makeSortHeader(COLS, "points", -1);
     const thead = h("thead", {});
@@ -1245,7 +1248,8 @@ pg.append(section("Live round"));
         h("td", { class: "l" }, p.owner_entry_id == null ? h("span", { class: "tag-free" }, "Free agent") : ownerOf(p)),
         h("td", { class: "num win" }, fmt(p.points)), h("td", { class: "num" }, fmt(p.minutes)),
         h("td", { class: "num" }, fmt(p.goals_scored)), h("td", { class: "num" }, fmt(p.assists)),
-        h("td", { class: "num" }, fmt(p.clean_sheets)), h("td", { class: "num" }, fmt(p.defensive_contribution)));
+        h("td", { class: "num" }, fmt(p.clean_sheets)), h("td", { class: "num" }, fmt(p.defensive_contribution)),
+        h("td", { class: "num" }, fmt(p.bonus)));
     }
     const more = h("button", { class: "ghost", type: "button", style: "margin-top:10px",
       onclick: () => { showAll = !showAll; render(); } });

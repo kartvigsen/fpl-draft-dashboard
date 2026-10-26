@@ -303,7 +303,7 @@ def build(raw=RAW, now=None):
     # the last one played), plus each manager's lineup for it. Unlike
     # "rounds"/records, this isn't finished-only -- the whole point of this
     # tab is the round as it stands right now.
-    ROUND_STAT_KEYS = ("minutes", "goals_scored", "assists", "clean_sheets", "defensive_contribution")
+    ROUND_STAT_KEYS = ("minutes", "goals_scored", "assists", "clean_sheets", "defensive_contribution", "bonus")
     live_cur = (_load(raw / "live" / f"gw{cur}.json", {}) or {}).get("elements", {}) if cur else {}
 
     def round_stats(el):

@@ -255,6 +255,15 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertEqual(HTML.count("const fdrColor = d =>"), 1)
         self.assertEqual(HTML.count("const fdrInk = d =>"), 1)
 
+    def test_live_round_shows_bonus_on_chips_modal_and_table(self):
+        self.assertIn("if (p.bonus) parts.push(`${p.bonus}B`);", HTML)
+        # Right after minutes, so a narrow chip never cuts it off.
+        self.assertLess(HTML.index("parts.push(`${p.minutes}'`)"), HTML.index("parts.push(`${p.bonus}B`)"))
+        self.assertLess(HTML.index("parts.push(`${p.bonus}B`)"), HTML.index("parts.push(`${p.goals_scored}G`)"))
+        self.assertIn('statRow("Bonus", fmt(p.bonus))', HTML)
+        self.assertIn("`incl. ${fmt(p.bonus)} bonus`", HTML)
+        self.assertIn('{ key: "bonus", label: "Bonus", num: true, get: p => p.bonus }', HTML)
+
     def test_live_round_tab_has_a_team_switcher(self):
         self.assertIn('class: "teamtab"', HTML)
         self.assertIn("activeEntryId = m.entry_id", HTML)

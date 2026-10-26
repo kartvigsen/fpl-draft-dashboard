@@ -329,7 +329,7 @@ def write_live_round_fixture(root):
     })
     _dump(root, "live/gw3.json", {"elements": {
         "1001": {"stats": {"total_points": 10, "minutes": 90, "goals_scored": 0, "assists": 1,
-                            "clean_sheets": 1, "defensive_contribution": 2}},
+                            "clean_sheets": 1, "defensive_contribution": 2, "bonus": 3}},
         "1002": {"stats": {"total_points": 5, "minutes": 90, "goals_scored": 1, "assists": 0,
                             "clean_sheets": 0, "defensive_contribution": 0}},
         "1003": {"stats": {"total_points": 2, "minutes": 10, "goals_scored": 0, "assists": 0,
@@ -820,6 +820,11 @@ class LiveRoundTest(unittest.TestCase):
         self.assertEqual(gio["assists"], 1)
         self.assertEqual(gio["clean_sheets"], 1)
         self.assertEqual(gio["defensive_contribution"], 2)
+        self.assertEqual(gio["bonus"], 3)
+
+    def test_bonus_defaults_to_zero_when_the_live_file_has_none(self):
+        other = self.team(201)["xi"][1]
+        self.assertEqual(other["bonus"], 0)
 
     def test_team_score_is_the_same_as_the_round_score(self):
         self.assertEqual(self.team(201)["score"], self.d["rounds"][-1]["scores"]["201"])
