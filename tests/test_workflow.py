@@ -26,8 +26,9 @@ class WorkflowScheduleTest(unittest.TestCase):
     def test_scheduled_runs_are_gated_by_the_match_aware_check(self):
         update_job = WORKFLOW[WORKFLOW.index("\n  update:"):WORKFLOW.index("\n  deploy:")]
         gate = update_job[update_job.index("id: gate"):]
-        self.assertIn('if [ "${{ github.event_name }}" = "schedule" ]; then\n            python3 should_update.py >> "$GITHUB_OUTPUT"', gate)
-        self.assertIn('echo "run=true" >> "$GITHUB_OUTPUT"', gate)  # push and manual runs always update
+        self.assertIn('if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.check }}" = "true" ]; then\n'
+                      '            python3 should_update.py >> "$GITHUB_OUTPUT"', gate)
+        self.assertIn('echo "run=true" >> "$GITHUB_OUTPUT"', gate)  # push and plain manual runs always update
         # The gate needs the repo (fixtures, last build), so checkout comes first.
         self.assertLess(update_job.index("actions/checkout@v4"), update_job.index("id: gate"))
         def step_block(marker):
@@ -39,6 +40,15 @@ class WorkflowScheduleTest(unittest.TestCase):
                        "configure-pages", "upload-pages-artifact"):
             self.assertIn("if: steps.gate.outputs.run == 'true'", step_block(marker), marker)
         self.assertIn("if: needs.update.outputs.run == 'true'", WORKFLOW[WORKFLOW.index("\n  deploy:"):])
+
+    def test_external_scheduler_runs_go_through_the_same_check(self):
+        # An outside scheduler starts the workflow via the API with
+        # inputs {"check": "true"}; the plain "Run workflow" button
+        # defaults to false and always updates.
+        dispatch = WORKFLOW[WORKFLOW.index("  workflow_dispatch:"):WORKFLOW.index("\npermissions:")]
+        self.assertIn("      check:", dispatch)
+        self.assertIn("type: boolean", dispatch)
+        self.assertIn("default: false", dispatch)
 
     def test_push_trigger_rebuilds_on_relevant_file_changes(self):
         self.assertIn("branches: [main]", WORKFLOW)

@@ -6,7 +6,10 @@ on:
     # while a match is on or just finished (any day of the week), when the
     # data is over 3 hours old, or when code changed since the last build.
     # No fixed clock times: GitHub's schedule can run hours late, which
-    # once made an exact-hour check skip every run for days.
+    # once made an exact-hour check skip every run for days. In practice
+    # GitHub fires this only every few hours, so an external scheduler can
+    # start the same check on time via "Run workflow" with check=true (see
+    # README); this timer stays as a fallback.
     - cron: "*/10 * * * *"
   push:
     branches: [main]
@@ -15,7 +18,12 @@ on:
       - "*.py"
       - "config.json"
       - ".github/workflows/update.yml"
-  workflow_dispatch:      # adds the manual "Run workflow" button
+  workflow_dispatch:      # the manual "Run workflow" button, and the external scheduler (see README)
+    inputs:
+      check:
+        description: "Only update if a match is on or the data is stale (set by the external scheduler)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write         # save downloaded data back to the repository
@@ -38,7 +46,7 @@ jobs:
       - name: Decide whether to update
         id: gate
         run: |
-          if [ "${{ github.event_name }}" = "schedule" ]; then
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.check }}" = "true" ]; then
             python3 should_update.py >> "$GITHUB_OUTPUT"
           else
             echo "run=true" >> "$GITHUB_OUTPUT"
