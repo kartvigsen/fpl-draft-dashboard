@@ -230,7 +230,16 @@ details .tbl-wrap { margin-top: 8px; }
   background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 14px;
   padding: 18px; max-width: 320px; width: 100%; box-shadow: 0 12px 40px rgba(0,0,0,.35);
 }
-.modal-card .pts { font-size: 30px; font-weight: 800; margin: 10px 0; }
+.modal-card .pts { font-size: 30px; font-weight: 800; margin: 10px 0; display: flex; align-items: center; gap: 10px; }
+.bonus-box {
+  display: inline-block; min-width: 18px; height: 18px; line-height: 18px; padding: 0 4px; border-radius: 5px;
+  font-size: 11px; font-weight: 800; color: #fff; text-align: center; font-variant-numeric: tabular-nums;
+}
+.bonus-box.b3 { background: #1f9d55; }
+.bonus-box.b2 { background: #2a78d6; }
+.bonus-box.b1 { background: #8b5cf6; }
+.bonus-box.corner { position: absolute; top: -10px; left: -6px; min-width: 16px; height: 16px; line-height: 16px; font-size: 10.5px; box-shadow: 0 0 0 2px #fff; }
+.bonus-box.lg { min-width: 26px; height: 26px; line-height: 26px; border-radius: 7px; font-size: 15px; }
 .modal-stats { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; margin: 0; font-size: 13.5px; }
 .modal-stats dt { color: var(--ink-2); }
 .modal-stats dd { margin: 0; font-weight: 650; text-align: right; font-variant-numeric: tabular-nums; }
@@ -1134,6 +1143,10 @@ pg.append(section("Live round"));
       `Gameweek ${CR.gw}${CR.finished ? " (finished)" : " (in progress)"} — updates a few times a day, not in real time.`));
 
     const POS_ORDER = ["GKP", "DEF", "MID", "FWD"];
+    // 3 green, 2 blue, 1 purple; a double gameweek can exceed 3, shown as green.
+    const bonusBox = (n, extra = "") => n > 0
+      ? h("span", { class: `bonus-box b${Math.min(n, 3)} ${extra}`.trim(), title: `${n} bonus point${n === 1 ? "" : "s"}` }, n)
+      : null;
     const statLine = p => {
       const parts = [];
       if (p.minutes) parts.push(`${p.minutes}'`);
@@ -1157,16 +1170,17 @@ pg.append(section("Live round"));
       modalCard.append(
         h("button", { type: "button", class: "ghost", style: "float:right", onclick: closeModal }, "Close"),
         h("h3", {}, p.name), h("p", { class: "sub" }, `${p.team} · ${p.pos}${role}`),
-        h("p", { class: "pts" }, `${fmt(p.points)} pts`),
+        h("p", { class: "pts" }, `${fmt(p.points)} pts`, bonusBox(p.bonus, "lg")),
         h("dl", { class: "modal-stats" },
           statRow("Minutes", fmt(p.minutes)), statRow("Goals", fmt(p.goals_scored)),
           statRow("Assists", fmt(p.assists)), statRow("Clean sheet", p.clean_sheets ? "Yes" : "No"),
-          statRow("Defensive contribution", fmt(p.defensive_contribution))));
+          statRow("Defensive contribution", fmt(p.defensive_contribution)), statRow("Bonus", fmt(p.bonus))));
       modalBackdrop.hidden = false;
     }
     const chip = p => h("button", { type: "button", class: p.minutes > 0 ? "player-chip played" : "player-chip", onclick: () => openPlayerModal(p) },
       p.is_captain ? h("span", { class: "badge c", title: "Captain" }, "C") :
         p.is_vice_captain ? h("span", { class: "badge vc", title: "Vice-captain" }, "V") : null,
+      bonusBox(p.bonus, "corner"),
       h("div", { class: "nm" }, p.name), h("div", { class: "cl" }, p.team),
       h("div", { class: "pt" }, fmt(p.points)), h("div", { class: "st" }, statLine(p)));
 
@@ -1224,6 +1238,7 @@ pg.append(section("Live round"));
       { key: "assists", label: "Assists", num: true, get: p => p.assists },
       { key: "clean_sheets", label: "CS", num: true, get: p => p.clean_sheets },
       { key: "defensive_contribution", label: "DEFCON", num: true, get: p => p.defensive_contribution },
+      { key: "bonus", label: "Bonus", num: true, get: p => p.bonus },
     ];
     const sorter = makeSortHeader(COLS, "points", -1);
     const thead = h("thead", {});
@@ -1245,7 +1260,8 @@ pg.append(section("Live round"));
         h("td", { class: "l" }, p.owner_entry_id == null ? h("span", { class: "tag-free" }, "Free agent") : ownerOf(p)),
         h("td", { class: "num win" }, fmt(p.points)), h("td", { class: "num" }, fmt(p.minutes)),
         h("td", { class: "num" }, fmt(p.goals_scored)), h("td", { class: "num" }, fmt(p.assists)),
-        h("td", { class: "num" }, fmt(p.clean_sheets)), h("td", { class: "num" }, fmt(p.defensive_contribution)));
+        h("td", { class: "num" }, fmt(p.clean_sheets)), h("td", { class: "num" }, fmt(p.defensive_contribution)),
+        h("td", { class: "num" }, bonusBox(p.bonus) || fmt(p.bonus)));
     }
     const more = h("button", { class: "ghost", type: "button", style: "margin-top:10px",
       onclick: () => { showAll = !showAll; render(); } });
