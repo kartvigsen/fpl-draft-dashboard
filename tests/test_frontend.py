@@ -255,14 +255,21 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertEqual(HTML.count("const fdrColor = d =>"), 1)
         self.assertEqual(HTML.count("const fdrInk = d =>"), 1)
 
-    def test_live_round_shows_bonus_on_chips_modal_and_table(self):
-        self.assertIn("if (p.bonus) parts.push(`${p.bonus}B`);", HTML)
-        # Right after minutes, so a narrow chip never cuts it off.
-        self.assertLess(HTML.index("parts.push(`${p.minutes}'`)"), HTML.index("parts.push(`${p.bonus}B`)"))
-        self.assertLess(HTML.index("parts.push(`${p.bonus}B`)"), HTML.index("parts.push(`${p.goals_scored}G`)"))
+    def test_live_round_shows_bonus_as_a_colour_coded_box(self):
+        # 3 green, 2 blue, 1 purple -- a double gameweek can exceed 3 (green).
+        self.assertIn("bonus-box b${Math.min(n, 3)}", HTML)
+        self.assertIn(".bonus-box.b3 { background: #1f9d55; }", HTML)
+        self.assertIn(".bonus-box.b2 { background: #2a78d6; }", HTML)
+        self.assertIn(".bonus-box.b1 { background: #8b5cf6; }", HTML)
+        # On the card corner, next to the pop-up's points, and in the table.
+        self.assertIn('bonusBox(p.bonus, "corner")', HTML)
+        self.assertIn('`${fmt(p.points)} pts`, bonusBox(p.bonus, "lg")', HTML)
+        self.assertIn("bonusBox(p.bonus) || fmt(p.bonus)", HTML)
         self.assertIn('statRow("Bonus", fmt(p.bonus))', HTML)
-        self.assertIn("`incl. ${fmt(p.bonus)} bonus`", HTML)
         self.assertIn('{ key: "bonus", label: "Bonus", num: true, get: p => p.bonus }', HTML)
+        # The box replaces the old text versions, so bonus isn't shown twice.
+        self.assertNotIn("`${p.bonus}B`", HTML)
+        self.assertNotIn("bonus`) : null", HTML)
 
     def test_live_round_tab_has_a_team_switcher(self):
         self.assertIn('class: "teamtab"', HTML)
