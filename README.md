@@ -46,7 +46,30 @@ If you use the included `.github/workflows/update.yml`, the dashboard follows ma
 - or the data is more than 3 hours old, so injuries, news, waivers and free agents stay fresh on days without games;
 - or code changed on `main` since the last build.
 
-Otherwise the run stops after a few seconds. It also rebuilds whenever `docs/index.html`, a top-level `.py` file, `config.json` or the workflow file changes on `main`. GitHub's schedule is best-effort and can run late on busy days, so "every 10 minutes" is a target, not a guarantee. You can still trigger it manually from the Actions tab ("Run workflow").
+Otherwise the run stops after a few seconds. It also rebuilds whenever `docs/index.html`, a top-level `.py` file, `config.json` or the workflow file changes on `main`. GitHub's schedule is best-effort: in practice it fires this workflow only every few hours, not every 10 minutes. For updates during matches, add the external scheduler below. You can still trigger an update manually from the Actions tab ("Run workflow"), which always updates.
+
+### Reliable match-day updates (external scheduler)
+
+A free scheduler outside GitHub asks GitHub to start the workflow every 10 minutes, with `check` set to `true`. GitHub starts requested runs straight away, and each one goes through the same `should_update.py` check as the built-in timer: a real update while a match is on or just finished, otherwise a quick skip. GitHub's own timer stays as a fallback. One-time setup:
+
+1. **Create a token that can only start this repo's workflows.** In GitHub: Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token.
+   - Repository access: *Only select repositories* → `fpl-draft-dashboard`.
+   - Permissions → Repository permissions → **Actions: Read and write**. Leave everything else at *No access*.
+   - Set an expiry (e.g. one year) and a reminder to renew it.
+   - Copy the token once and paste it only into the scheduler in step 2. Never put it in this repository (it's public) or in a chat.
+2. **Create the scheduled job** on a free scheduler such as [cron-job.org](https://cron-job.org):
+   - URL: `https://api.github.com/repos/kartvigsen/fpl-draft-dashboard/actions/workflows/update.yml/dispatches`
+   - Schedule: every 10 minutes.
+   - Request method: `POST`.
+   - Headers:
+     - `Accept: application/vnd.github+json`
+     - `Authorization: Bearer <your token>`
+     - `X-GitHub-Api-Version: 2022-11-28`
+     - `Content-Type: application/json`
+   - Request body: `{"ref":"main","inputs":{"check":"true"}}`
+3. **Check it works.** Run the job once from the scheduler. A success response is `204` (or `200`). In GitHub's Actions tab, a new "Update dashboard" run appears, started by *workflow_dispatch*. Its "Decide whether to update" step logs either `Updating: …` or `Skipping: …` with the reason.
+
+To stop it, disable the job in the scheduler, or delete the token in GitHub; a deleted token stops working immediately. Each 10-minute run shows up in the Actions tab, and quick skips take a few seconds. The repository is public, so these runs cost nothing.
 
 **Add to Home Screen:** the site is installable as an app icon on phones (`docs/manifest.json`, `docs/icons/`, `docs/sw.js`). On iOS, open the site in Safari and use Share → "Add to Home Screen"; on Android/Chrome, use the browser menu's "Install app" / "Add to Home screen". It opens without browser chrome and uses the site's blue bar-chart icon.
 
