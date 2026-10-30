@@ -65,7 +65,7 @@ class WorkflowScheduleTest(unittest.TestCase):
         self.assertIn("group: dashboard", WORKFLOW)
         self.assertIn("cancel-in-progress: false", WORKFLOW)
         self.assertIn("python3 update.py", WORKFLOW)
-        self.assertIn("actions/deploy-pages@v4", WORKFLOW)
+        self.assertIn("actions/deploy-pages@v5", WORKFLOW)
         self.assertIn("workflow_dispatch:", WORKFLOW)
 
     def test_pages_deploy_is_a_separate_job_gated_to_main_only(self):
@@ -111,6 +111,15 @@ class NodeRuntimeTest(unittest.TestCase):
         self.assertIn("actions/setup-python@v6", WORKFLOW)
         self.assertNotIn("actions/checkout@v4", WORKFLOW)
         self.assertNotIn("actions/setup-python@v5", WORKFLOW)
+
+    def test_pages_actions_run_on_node_24_too(self):
+        # upload-pages-artifact v4+ leaves out dotfiles by default; docs/
+        # has none, so nothing the site needs is dropped.
+        self.assertIn("actions/configure-pages@v6", WORKFLOW)
+        self.assertIn("actions/upload-pages-artifact@v5", WORKFLOW)
+        self.assertIn("actions/deploy-pages@v5", WORKFLOW)
+        hidden = [p for p in (ROOT / "docs").rglob(".*")]
+        self.assertEqual(hidden, [], "upload-pages-artifact would leave these out")
 
 
 def save_step_script():
