@@ -3,7 +3,11 @@
 No YAML parser is used (standard library only), just string-level checks on
 the schedule, gating logic and push trigger described in README.md.
 """
+import os
+import subprocess
 import sys
+import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -30,7 +34,7 @@ class WorkflowScheduleTest(unittest.TestCase):
                       '            python3 should_update.py >> "$GITHUB_OUTPUT"', gate)
         self.assertIn('echo "run=true" >> "$GITHUB_OUTPUT"', gate)  # push and plain manual runs always update
         # The gate needs the repo (fixtures, last build), so checkout comes first.
-        self.assertLess(update_job.index("actions/checkout@v4"), update_job.index("id: gate"))
+        self.assertLess(update_job.index("actions/checkout@v5"), update_job.index("id: gate"))
         def step_block(marker):
             at = update_job.index(marker)
             start = update_job.rindex("\n      - ", 0, at)
@@ -99,6 +103,67 @@ class WorkflowScheduleTest(unittest.TestCase):
         # re-send next run -- must stage first, then check the staged diff.
         self.assertIn("git add .digest_state.json", WORKFLOW)
         self.assertIn("git diff --cached --quiet -- .digest_state.json", WORKFLOW)
+
+
+class NodeRuntimeTest(unittest.TestCase):
+    def test_actions_run_on_node_24_not_the_retired_node_20(self):
+        self.assertIn("actions/checkout@v5", WORKFLOW)
+        self.assertIn("actions/setup-python@v6", WORKFLOW)
+        self.assertNotIn("actions/checkout@v4", WORKFLOW)
+        self.assertNotIn("actions/setup-python@v5", WORKFLOW)
+
+
+def save_step_script():
+    """The "Save new data to the repository" step's shell script, as run."""
+    step = WORKFLOW[WORKFLOW.index("- name: Save new data to the repository"):]
+    step = step[:step.index("\n\n")]
+    return textwrap.dedent(step[step.index("run: |\n") + len("run: |\n"):])
+
+
+class SaveStepPushRetryTest(unittest.TestCase):
+    """Runs the real save-step script against a fake git whose first N
+    pushes fail, the way GitHub's occasional 500 on push does."""
+
+    def run_save(self, failing_pushes):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(tmp, ignore_errors=True))
+        (tmp / "fails_left").write_text(str(failing_pushes))
+        git = tmp / "git"
+        git.write_text(textwrap.dedent(f"""\
+            #!/bin/bash
+            echo "$*" >> {tmp}/calls
+            case "$1" in
+              diff) exit 1 ;;   # there are staged changes
+              push)
+                n=$(cat {tmp}/fails_left)
+                if [ "$n" -gt 0 ]; then echo $((n - 1)) > {tmp}/fails_left; exit 1; fi ;;
+            esac
+            exit 0
+            """))
+        sleep = tmp / "sleep"
+        sleep.write_text("#!/bin/bash\necho \"sleep $*\" >> %s/calls\n" % tmp)
+        git.chmod(0o755)
+        sleep.chmod(0o755)
+        env = {**os.environ, "PATH": f"{tmp}:{os.environ['PATH']}"}
+        proc = subprocess.run(["bash", "-e", "-c", save_step_script()], env=env, capture_output=True, text=True)
+        calls = (tmp / "calls").read_text().splitlines()
+        return proc.returncode, calls
+
+    def test_a_clean_push_happens_once(self):
+        code, calls = self.run_save(0)
+        self.assertEqual(code, 0)
+        self.assertEqual([c for c in calls if c.startswith(("push", "pull", "sleep"))], ["push"])
+
+    def test_a_transient_failure_is_retried_after_catching_up_with_main(self):
+        code, calls = self.run_save(2)
+        self.assertEqual(code, 0)
+        self.assertEqual([c for c in calls if c.startswith(("push", "pull", "sleep"))],
+                         ["push", "sleep 15", "pull --rebase", "push", "sleep 30", "pull --rebase", "push"])
+
+    def test_three_failed_pushes_fail_the_run(self):
+        code, calls = self.run_save(3)
+        self.assertNotEqual(code, 0)
+        self.assertEqual(sum(c == "push" for c in calls), 3)
 
 
 if __name__ == "__main__":
