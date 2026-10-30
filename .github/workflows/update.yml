@@ -41,7 +41,7 @@ jobs:
     outputs:
       run: ${{ steps.gate.outputs.run }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Decide whether to update
         id: gate
@@ -52,7 +52,7 @@ jobs:
             echo "run=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         if: steps.gate.outputs.run == 'true'
         with:
           python-version: "3.12"
@@ -71,7 +71,14 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "Update data $(date -u +%Y-%m-%d)"
-            git push
+            # GitHub occasionally answers a push with a 500; retry before failing the run.
+            for attempt in 1 2 3; do
+              git push && break
+              if [ "$attempt" = 3 ]; then echo "Push failed 3 times, giving up."; exit 1; fi
+              echo "Push failed (attempt $attempt), retrying in $((attempt * 15))s."
+              sleep $((attempt * 15))
+              git pull --rebase
+            done
           fi
 
       - name: Send the weekly digest, if a new gameweek just finished
