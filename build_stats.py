@@ -355,7 +355,8 @@ def build(raw=RAW, now=None):
             "teams": team_lineups,
             "all_players": sorted((round_player(p["id"]) for p in boot.get("elements", [])),
                                    key=lambda r: (-r["points"], r["name"])),
-            "matches": _round_matches(live_cur_full, boot, players, owner_by_element),
+            "matches": _round_matches(live_cur_full, boot, players, owner_by_element,
+                                      _load(raw / "classic_fixtures_current.json", []) or [], classic_teams),
         }
 
     # ---- next 5 fixtures per Premier League team (for the Fixtures tab) --
@@ -695,14 +696,22 @@ MATCH_STATS = ("goals_scored", "assists", "own_goals", "yellow_cards", "red_card
                "saves", "bonus", "defensive_contribution")
 
 
-def _round_matches(live, boot, players, owner_by_element):
+def _round_matches(live, boot, players, owner_by_element, clock_fixtures=(), classic_teams=()):
     """Every Premier League match in the live gameweek, livescore-style,
     with each side's players who got minutes in *that* match. Per-match
     stats come from the fixture's own stat lists (goals, cards, bonus,
     DEFCON...) and each player's per-fixture "explain" entry (minutes,
     clean sheet, points), so a double gameweek splits correctly.
+
+    The draft feed's match clock is always 0, so "minutes" comes from the
+    classic feed's copy of the same match (paired by match code, or by
+    kick-off time and team names); None when that feed has no clock.
     """
     teams = {t["id"]: t for t in boot.get("teams", [])}
+    classic_short = {t.get("id"): t.get("short_name") for t in classic_teams}
+    clock_by_code = {c.get("code"): c.get("minutes") for c in clock_fixtures if c.get("code") is not None}
+    clock_by_kickoff = {(c.get("kickoff_time"), classic_short.get(c.get("team_h")), classic_short.get(c.get("team_a"))):
+                        c.get("minutes") for c in clock_fixtures}
     elem_team = {p["id"]: p.get("team") for p in boot.get("elements", [])}
     per_fixture = {}  # fixture id -> {element: {"minutes", "clean_sheets", "points"}}
     for el, v in (live.get("elements") or {}).items():
@@ -743,7 +752,13 @@ def _round_matches(live, boot, players, owner_by_element):
             return {"short": t.get("short_name", "?"), "name": t.get("name", "?"),
                     "score": score if status != "upcoming" else None, "players": rows}
 
+        home_short = teams.get(f.get("team_h"), {}).get("short_name")
+        away_short = teams.get(f.get("team_a"), {}).get("short_name")
+        clock = clock_by_code.get(f.get("code"))
+        if clock is None:
+            clock = clock_by_kickoff.get((f.get("kickoff_time"), home_short, away_short))
         matches.append({"id": fid, "kickoff": f.get("kickoff_time"), "status": status,
+                        "minutes": clock if status == "live" and clock else None,
                         "home": side(f.get("team_h"), f.get("team_h_score")),
                         "away": side(f.get("team_a"), f.get("team_a_score"))})
     return matches
