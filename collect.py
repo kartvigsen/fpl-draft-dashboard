@@ -104,6 +104,13 @@ def collect(force=False, log=print):
         save("fixtures.json", get_json("fixtures/?future=1", base=CLASSIC_BASE))
     except FetchError as e:
         warnings.append(f"Fixtures/team strength: {e}")
+    # The current gameweek's matches from the same host: unlike the draft
+    # feed, its "minutes" field follows the match clock (Live round tab).
+    if current:
+        try:
+            save("classic_fixtures_current.json", get_json(f"fixtures/?event={current}", base=CLASSIC_BASE))
+        except FetchError as e:
+            warnings.append(f"Live match minutes: {e}")
 
     # 3. Per-gameweek files: live player points + each manager's lineup.
     # A new season gets a new league_id (see README); an old cache saved

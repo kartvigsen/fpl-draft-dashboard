@@ -240,6 +240,46 @@ details .tbl-wrap { margin-top: 8px; }
 .bonus-box.b1 { background: #8b5cf6; }
 .bonus-box.corner { position: absolute; top: -10px; left: -6px; min-width: 16px; height: 16px; line-height: 16px; font-size: 10.5px; box-shadow: 0 0 0 2px #fff; }
 .bonus-box.lg { min-width: 26px; height: 26px; line-height: 26px; border-radius: 7px; font-size: 15px; }
+.modal-card.wide { max-width: 600px; max-height: 88vh; overflow-y: auto; }
+.mx-list { display: grid; }
+.mx-day { font-size: 12px; font-weight: 650; color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em; padding: 12px 2px 6px; }
+.mx-day:first-child { padding-top: 0; }
+.mx-row {
+  display: grid; grid-template-columns: 40px minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 2px;
+  width: 100%; padding: 10px 6px; background: none; border: 0; border-top: 1px solid var(--border);
+  color: var(--ink); font: inherit; text-align: left; cursor: pointer; border-radius: 0;
+}
+.mx-row:hover { background: var(--wash); }
+.mx-status { grid-row: 1; font-size: 12px; font-weight: 700; color: var(--ink-2); font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: 4px; }
+.mx-status.live { color: var(--bad); }
+.mx-status.live { gap: 0; }
+.mx-tick { animation: mx-blink 1s step-end infinite; }
+@keyframes mx-blink { 50% { opacity: .2; } }
+@media (prefers-reduced-motion: reduce) { .mx-tick { animation: none; } }
+.mx-team { font-size: 14px; font-weight: 600; line-height: 1.2; }
+.mx-team.h { text-align: right; }
+@media (max-width: 380px) { .mx-team { font-size: 12.5px; } .mx-row { column-gap: 6px; } }
+.mx-score { min-width: 50px; text-align: center; font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums; padding: 3px 8px; border-radius: 7px; background: var(--wash); }
+.mx-row.live .mx-score { color: var(--bad); }
+.mx-row.upcoming .mx-score { color: var(--muted); font-weight: 600; }
+.mx-scorers { grid-row: 2; font-size: 11.5px; color: var(--muted); line-height: 1.3; }
+.mx-scorers.h { grid-column: 2; text-align: right; }
+.mx-scorers.a { grid-column: 4; }
+.mx-title { font-size: 18px; margin: 4px 0 6px; }
+.mx-side { font-size: 13px; margin: 16px 0 6px; color: var(--ink-2); }
+.mx-tbl { font-size: 13px; }
+.mx-tbl th, .mx-tbl td { padding: 6px 4px; }
+.mx-tbl th:first-child, .mx-tbl td:first-child { padding-left: 0; }
+@media (max-width: 380px) { .modal-card.wide { padding: 14px 12px; } .mx-tbl { font-size: 12px; } .mx-tbl th, .mx-tbl td { padding: 6px 3px; } }
+.mx-tbl td.num, .mx-tbl th:not(.l) { text-align: center; width: 1%; white-space: nowrap; }
+.mx-who { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.mx-nm { font-weight: 600; }
+.mx-pos { font-size: 10.5px; color: var(--muted); }
+.mx-card { display: inline-block; width: 8px; height: 11px; border-radius: 2px; }
+.mx-card.y { background: #f2c200; }
+.mx-card.r { background: #d63c3c; }
+.mx-og { font-size: 10px; font-weight: 700; color: var(--bad); }
+.mx-legend { margin-top: 12px; font-size: 12px; }
 .modal-stats { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; margin: 0; font-size: 13.5px; }
 .modal-stats dt { color: var(--ink-2); }
 .modal-stats dd { margin: 0; font-weight: 650; text-align: right; font-variant-numeric: tabular-nums; }
@@ -1165,6 +1205,7 @@ pg.append(section("Live round"));
     document.addEventListener("keydown", ev => { if (ev.key === "Escape" && !modalBackdrop.hidden) closeModal(); });
     const statRow = (label, value) => [h("dt", {}, label), h("dd", {}, value)];
     function openPlayerModal(p) {
+      modalCard.className = "modal-card";
       modalCard.textContent = "";
       const role = p.is_captain ? " · Captain" : p.is_vice_captain ? " · Vice-captain" : "";
       modalCard.append(
@@ -1214,6 +1255,97 @@ pg.append(section("Live round"));
     paintPitch();
     pg.append(card("Team lineups", "Captain (C) and vice-captain (V) are marked; faded players haven't played this round (yet). Click a team to switch, or a player for their full stats.",
       h("div", { class: "teamtabs", role: "tablist" }, tabs), pitchHost), modalBackdrop);
+
+    /* matches (livescore) */
+    const MX = CR.matches || [];
+    if (MX.length) {
+      const dayOf = iso => new Date(iso).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" });
+      const timeOf = iso => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+      // The clock is a snapshot from the last update, so it counts on in the
+      // browser -- capped at 45 until the next update confirms the second
+      // half (never "52'" at half-time) and at 90 after that.
+      const builtAt = Date.parse(meta.generated_at);
+      function liveMinute(m, now = Date.now()) {
+        if (m.minutes > 0) {
+          const est = m.minutes + Math.max(0, Math.floor((now - builtAt) / 60000));
+          const cap = m.minutes <= 45 ? 45 : 90;
+          return est > cap ? `${cap}+` : String(est);
+        }
+        // No clock in the feed: estimate from kick-off, allowing ~16 minutes of half-time.
+        const el = Math.floor((now - Date.parse(m.kickoff)) / 60000);
+        if (!(el >= 0)) return "1";
+        if (el < 45) return String(el + 1);
+        if (el <= 47) return "45+";
+        if (el < 62) return "HT";
+        return el - 16 >= 90 ? "90+" : String(el - 16);
+      }
+      const liveClocks = [];
+      const clockEl = m => {
+        const min = h("span", { class: "mx-min" }), tick = h("span", { class: "mx-tick" }, "'");
+        const paint = () => { const t = liveMinute(m); min.textContent = t; tick.hidden = t === "HT"; };
+        paint(); liveClocks.push(paint);
+        return [min, tick];
+      };
+      setInterval(() => liveClocks.forEach(p => p()), 20000);
+      const statusEl = m => m.status === "ft" ? h("span", { class: "mx-status" }, "FT")
+        : m.status === "live" ? h("span", { class: "mx-status live", title: "Live" }, clockEl(m))
+        : h("span", { class: "mx-status" }, m.kickoff ? timeOf(m.kickoff) : "TBC");
+      // A side's goals include the other side's own goals, marked (OG).
+      const scorers = (own, other) => [
+        ...own.players.filter(p => p.goals_scored).map(p => p.goals_scored > 1 ? `${p.name} ×${p.goals_scored}` : p.name),
+        ...other.players.filter(p => p.own_goals).map(p => `${p.name} (OG)`),
+      ].join(", ");
+      const ownerDot = p => p.owner_entry_id != null && byId[p.owner_entry_id]
+        ? h("span", { class: "dot", title: `Owned by ${nameOf(byId[p.owner_entry_id])}`, style: `background:${col(byId[p.owner_entry_id])}` }) : null;
+      const blank = n => n ? n : "";
+      const sideTable = s => s.players.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "mx-tbl" },
+        h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Player"), ["Min", "G", "A", "CS", "DC", "B", "Pts"].map(t => h("th", {}, t)))),
+        h("tbody", {}, s.players.map(p => h("tr", {},
+          h("td", { class: "l" }, h("span", { class: "mx-who" }, ownerDot(p), h("span", { class: "mx-nm" }, p.name),
+            h("span", { class: "mx-pos" }, p.pos),
+            p.yellow_cards ? h("span", { class: "mx-card y", title: "Yellow card" }) : null,
+            p.red_cards ? h("span", { class: "mx-card r", title: "Red card" }) : null,
+            p.own_goals ? h("span", { class: "mx-og", title: "Own goal" }, "OG") : null)),
+          h("td", { class: "num" }, p.minutes), h("td", { class: "num" }, blank(p.goals_scored)),
+          h("td", { class: "num" }, blank(p.assists)), h("td", { class: "num" }, p.clean_sheets ? "✓" : ""),
+          h("td", { class: "num" }, blank(p.defensive_contribution)), h("td", { class: "num" }, bonusBox(p.bonus)),
+          h("td", { class: "num win" }, p.points)))))) : emptyMsg("No players yet.");
+
+      function openMatch(m) {
+        modalCard.className = "modal-card wide";
+        modalCard.textContent = "";
+        const when = m.status === "ft" ? "Full time" : m.status === "live" ? ["Live · ", h("span", { class: "mx-status live" }, clockEl(m))]
+          : `Kick-off ${dayOf(m.kickoff)}, ${timeOf(m.kickoff)}`;
+        modalCard.append(
+          h("button", { type: "button", class: "ghost", style: "float:right", onclick: closeModal }, "Close"),
+          h("p", { class: "sub" }, when),
+          h("h3", { class: "mx-title" }, m.status === "upcoming" ? `${m.home.name} v ${m.away.name}`
+            : `${m.home.name} ${m.home.score ?? 0} – ${m.away.score ?? 0} ${m.away.name}`),
+          m.status === "upcoming" ? emptyMsg("Player stats appear once the match kicks off.") : h("div", {},
+            h("h4", { class: "mx-side" }, m.home.name), sideTable(m.home),
+            h("h4", { class: "mx-side" }, m.away.name), sideTable(m.away),
+            h("p", { class: "sub mx-legend" }, "A dot shows which manager in the league owns the player. G goals · A assists · CS clean sheet · DC defensive contributions · B bonus.")));
+        modalBackdrop.hidden = false;
+      }
+
+      const rows = [];
+      let lastDay = null;
+      for (const m of MX) {
+        const day = m.kickoff ? dayOf(m.kickoff) : "Date to be confirmed";
+        if (day !== lastDay) { rows.push(h("div", { class: "mx-day" }, day)); lastDay = day; }
+        const hs = scorers(m.home, m.away), as = scorers(m.away, m.home);
+        rows.push(h("button", { type: "button", class: `mx-row ${m.status}`, onclick: () => openMatch(m),
+            "aria-label": `${m.home.name} ${m.home.score ?? ""} ${m.away.name} ${m.away.score ?? ""}, ${m.status === "upcoming" ? "not started" : "show player stats"}` },
+          statusEl(m),
+          h("span", { class: "mx-team h" }, m.home.name),
+          h("span", { class: "mx-score" }, m.status === "upcoming" ? "–" : `${m.home.score ?? 0} – ${m.away.score ?? 0}`),
+          h("span", { class: "mx-team a" }, m.away.name),
+          hs || as ? h("span", { class: "mx-scorers h" }, hs) : null,
+          hs || as ? h("span", { class: "mx-scorers a" }, as) : null));
+      }
+      pg.append(card("Matches", `Every Premier League match in gameweek ${CR.gw}. Tap a match for its players' minutes, goals, assists, clean sheets, DEFCON, bonus and points.`,
+        h("div", { class: "mx-list" }, rows)));
+    }
 
     const LIM = 20;
     let showAll = false;

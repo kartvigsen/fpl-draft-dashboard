@@ -112,7 +112,8 @@ jobs:
   # tested (e.g. via "Run workflow") from any branch.
   deploy:
     needs: update
-    if: needs.update.outputs.run == 'true'
+    # Branch runs (e.g. testing a change via Run workflow) rebuild data but never publish.
+    if: needs.update.outputs.run == 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
