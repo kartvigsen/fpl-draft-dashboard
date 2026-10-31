@@ -582,6 +582,8 @@ function makeSortHeader(cols, initialKey, initialDir) {
     onChange();
   }
   return {
+    get key() { return sortKey; },
+    get dir() { return sortDir; },
     sorted(list) {
       const col = cols.find(c => c.key === sortKey);
       return [...list].sort((a, b) => {
@@ -1434,13 +1436,28 @@ pg = panels.fixtures;
       { key: "b", label: "B", num: true, get: p => p.bonus, title: "Bonus points" },
       { key: "form", label: "Form", num: true, get: p => p.form, title: "FPL form: average points per game, last 30 days" },
     ];
+    // Keepers get a Saves column, shown when the GKP filter is on.
+    const SAVES_COL = { key: "sv", label: "Saves", num: true, get: p => p.saves, title: "Saves" };
     function openClub(t) {
       const squad = (D.all_players || []).filter(p => p.club === t.short_name);
-      const sorter = makeSortHeader(SQUAD_COLS, "pts", -1);
-      let pos = "";
+      let cols = SQUAD_COLS, sorter = makeSortHeader(cols, "pts", -1);
+      let pos = "", showZero = false;
       const thead = h("thead", {}), body = h("tbody", {});
+      const setPos = v => {
+        pos = v;
+        posBtns.forEach((b, i) => b.setAttribute("aria-pressed", String(["", "GKP", "DEF", "MID", "FWD"][i] === pos)));
+        const next = pos === "GKP" ? [...SQUAD_COLS, SAVES_COL] : SQUAD_COLS;
+        if (next !== cols) {
+          const keep = next.some(c => c.key === sorter.key);
+          cols = next;
+          sorter = makeSortHeader(cols, keep ? sorter.key : "pts", keep ? sorter.dir : -1);
+        }
+        paint();
+      };
       const posBtns = ["", "GKP", "DEF", "MID", "FWD"].map(v => h("button", { type: "button", class: "seg", "aria-pressed": String(v === pos),
-        onclick: () => { pos = v; posBtns.forEach((b, i) => b.setAttribute("aria-pressed", String(["", "GKP", "DEF", "MID", "FWD"][i] === pos))); paint(); } }, v || "All"));
+        onclick: () => setPos(v) }, v || "All"));
+      const zeroBtn = h("button", { class: "ghost", type: "button", style: "margin-top:10px",
+        onclick: () => { showZero = !showZero; paint(); } });
       const blank = v => (v ? fmt(v) : "");
       const playerCell = p => h("td", { class: "l sq-name" },
         h("span", { class: "sq-nm" }, p.name),
@@ -1450,17 +1467,23 @@ pg = panels.fixtures;
           STATUS_TAG[p.status] ? h("span", { class: `sg-flag ${p.status === "d" ? "warn" : "bad"}`, style: "margin-left:0", title: p.news || STATUS_TAG[p.status] },
             p.status === "d" && p.chance != null ? `${p.chance}%` : STATUS_TAG[p.status]) : null));
       function paint() {
-        const list = sorter.sorted(squad.filter(p => !pos || p.pos === pos));
+        const inPos = squad.filter(p => !pos || p.pos === pos);
+        const zero = inPos.filter(p => !p.minutes).length;
+        const list = sorter.sorted(showZero ? inPos : inPos.filter(p => p.minutes));
+        zeroBtn.hidden = !zero;
+        zeroBtn.textContent = showZero ? `Hide players with 0 minutes`
+          : `Show ${zero} player${zero === 1 ? "" : "s"} with 0 minutes`;
         body.textContent = "";
         body.append(...list.map(p => h("tr", { class: p.minutes ? "" : "sq-zero" }, playerCell(p),
           h("td", { class: "num win" }, fmt(p.total_points)), h("td", { class: "num" }, fmt(p.minutes)),
           h("td", { class: "num" }, blank(p.goals_scored)), h("td", { class: "num" }, blank(p.assists)),
           h("td", { class: "num" }, blank(p.clean_sheets)), h("td", { class: "num" }, blank(p.defensive_contribution)),
-          h("td", { class: "num" }, blank(p.bonus)), h("td", { class: "num" }, p.form ? p.form.toFixed(1) : ""))));
-        if (!list.length) body.append(h("tr", {}, h("td", { class: "l", colspan: String(SQUAD_COLS.length) }, emptyMsg("No players."))));
+          h("td", { class: "num" }, blank(p.bonus)), h("td", { class: "num" }, p.form ? p.form.toFixed(1) : ""),
+          cols.includes(SAVES_COL) ? h("td", { class: "num" }, blank(p.saves)) : null)));
+        if (!list.length) body.append(h("tr", {}, h("td", { class: "l", colspan: String(cols.length) }, emptyMsg("No players have played yet."))));
         thead.textContent = "";
         const tr = sorter.row(paint);
-        [...tr.children].forEach((th, i) => { if (SQUAD_COLS[i].title) th.title = SQUAD_COLS[i].title; });
+        [...tr.children].forEach((th, i) => { if (cols[i].title) th.title = cols[i].title; });
         thead.append(tr);
       }
       paint();
@@ -1474,7 +1497,7 @@ pg = panels.fixtures;
           title: `GW${f.gw}: ${f.home ? "Home" : "Away"} vs ${f.opponent}${f.difficulty ? `, difficulty ${f.difficulty}/5` : ""}` },
           h("span", { class: "gw" }, `GW${f.gw}`), `${f.opponent} (${f.home ? "H" : "A"})`))),
         h("div", { class: "sq-seg", role: "group", "aria-label": "Filter by position" }, posBtns),
-        h("div", { class: "tbl-wrap" }, h("table", { class: "mx-tbl sq-tbl" }, thead, body)),
+        h("div", { class: "tbl-wrap" }, h("table", { class: "mx-tbl sq-tbl" }, thead, body)), zeroBtn,
         h("p", { class: "sub mx-legend" }, "Season totals. A dot shows the league owner · FA free agent · G goals · A assists · CS clean sheets · DC defensive contributions · B bonus."));
       modalBackdrop.hidden = false;
     }
