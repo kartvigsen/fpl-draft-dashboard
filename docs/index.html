@@ -689,7 +689,7 @@ pg.append(tiles);
 /* standings */
 pg.append(section("Standings"));
 if (D.live_round) pg.append(h("p", { class: "sub" },
-  `Pts include live GW${D.live_round.gw}.`));
+  `Pts and bench pts include live GW${D.live_round.gw}.`));
 {
   const head = ["Team", "Pts", "Avg", "Rounds won", "Best", "Worst", "Moves", "Bench pts"];
   const body = ranked.map(m => {
@@ -964,8 +964,13 @@ if (gws.length) {
     paintTeam();
     pg.append(h("div", { class: "teamtabs", role: "tablist" }, tabs), teamHost);
   }
-  const benchRows = ranked.map(m => ({ m, value: P.bench[m.entry_id].total,
-    note: P.bench[m.entry_id].worst_gw ? `Worst round: ${P.bench[m.entry_id].worst_gw.points} bench pts (GW${P.bench[m.entry_id].worst_gw.gw})` : "" }));
+  const liveGw = g => (D.live_round && g === D.live_round.gw ? `${g} live` : `${g}`);
+  const benchRows = ranked.map(m => {
+    const b = P.bench[m.entry_id];
+    const worst = b.worst_gw ? `Worst round: ${b.worst_gw.points} bench pts (GW${liveGw(b.worst_gw.gw)})` : "";
+    const live = b.live_points && !(b.worst_gw && D.live_round && b.worst_gw.gw === D.live_round.gw) ? `+${b.live_points} live` : "";
+    return { m, value: b.total, note: [worst, live].filter(Boolean).join(" · ") };
+  });
   // One row per player -- a flex list here wraps onto two lines once a
   // manager/player name is long enough, same fix as every other dense
   // per-row listing on the site (a table scrolls sideways instead).
@@ -979,7 +984,7 @@ if (gws.length) {
     { label: "Player", get: p => h("span", {}, p.name, h("span", { class: "pos" }, p.pos)) },
     { label: "Club", get: p => p.team },
     { label: "Manager", get: p => h("span", { class: "who" }, dot(byId[p.entry_id]), nameOf(byId[p.entry_id])) },
-    { label: "GW", get: p => p.gw },
+    { label: "GW", get: p => liveGw(p.gw) },
     { label: "Points", get: p => p.points },
   ]) || emptyMsg("No player has scored from a bench yet.");
   pg.append(h("div", { class: "grid2" },
@@ -989,7 +994,7 @@ if (gws.length) {
     rankedList(P.best_rounds.slice(0, 6), [
       { label: "Player", get: p => p.name },
       { label: "Manager", get: p => h("span", { class: "who" }, dot(byId[p.entry_id]), nameOf(byId[p.entry_id])) },
-      { label: "GW", get: p => (D.live_round && p.gw === D.live_round.gw ? `${p.gw} live` : p.gw) },
+      { label: "GW", get: p => liveGw(p.gw) },
       { label: "Points", get: p => p.points },
     ])));
 } else pg.append(emptyMsg("Player insights appear after the first gameweek is finished."));
