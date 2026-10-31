@@ -271,6 +271,30 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertNotIn("`${p.bonus}B`", HTML)
         self.assertNotIn("bonus`) : null", HTML)
 
+    def test_live_round_has_a_livescore_match_list_between_lineups_and_all_players(self):
+        start = HTML.index("/* live round */") if "/* live round */" in HTML else 0
+        lineups = HTML.index('card("Team lineups"', start)
+        matches = HTML.index('card("Matches"', start)
+        every = HTML.index("const LIM = 20;", lineups)
+        self.assertLess(lineups, matches)
+        self.assertLess(matches, every)
+        self.assertIn("const MX = CR.matches || [];", HTML)
+        self.assertIn('m.status === "live" ? h("span", { class: "mx-status live" }', HTML)
+        self.assertIn('${p.name} (OG)', HTML)  # own goals count for the other side
+
+    def test_tapping_a_match_opens_a_player_overview(self):
+        self.assertIn("function openMatch(m)", HTML)
+        self.assertIn('modalCard.className = "modal-card wide";', HTML)
+        self.assertIn('["Min", "G", "A", "CS", "DC", "B", "Pts"]', HTML)
+        self.assertIn("bonusBox(p.bonus)", HTML)
+        self.assertIn('title: `Owned by ${nameOf(byId[p.owner_entry_id])}`', HTML)
+        # The player pop-up goes back to its normal width after a match pop-up.
+        self.assertIn('function openPlayerModal(p) {\n      modalCard.className = "modal-card";', HTML)
+
+    def test_match_rows_never_cut_off_team_names(self):
+        self.assertIn(".mx-team { font-size: 14px; font-weight: 600; line-height: 1.2; }", HTML)
+        self.assertIn("@media (max-width: 380px) { .mx-team { font-size: 12.5px; }", HTML)
+
     def test_live_round_tab_has_a_team_switcher(self):
         self.assertIn('class: "teamtab"', HTML)
         self.assertIn("activeEntryId = m.entry_id", HTML)

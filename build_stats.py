@@ -304,7 +304,8 @@ def build(raw=RAW, now=None):
     # "rounds"/records, this isn't finished-only -- the whole point of this
     # tab is the round as it stands right now.
     ROUND_STAT_KEYS = ("minutes", "goals_scored", "assists", "clean_sheets", "defensive_contribution", "bonus")
-    live_cur = (_load(raw / "live" / f"gw{cur}.json", {}) or {}).get("elements", {}) if cur else {}
+    live_cur_full = (_load(raw / "live" / f"gw{cur}.json", {}) or {}) if cur else {}
+    live_cur = live_cur_full.get("elements", {}) or {}
 
     def round_stats(el):
         s = (live_cur.get(str(el), {}) or {}).get("stats", {}) or {}
@@ -354,6 +355,7 @@ def build(raw=RAW, now=None):
             "teams": team_lineups,
             "all_players": sorted((round_player(p["id"]) for p in boot.get("elements", [])),
                                    key=lambda r: (-r["points"], r["name"])),
+            "matches": _round_matches(live_cur_full, boot, players, owner_by_element),
         }
 
     # ---- next 5 fixtures per Premier League team (for the Fixtures tab) --
@@ -687,6 +689,64 @@ def build(raw=RAW, now=None):
         "transfer_suggestions": transfer_suggestions,
         "checks": checks,
     }
+
+
+MATCH_STATS = ("goals_scored", "assists", "own_goals", "yellow_cards", "red_cards",
+               "saves", "bonus", "defensive_contribution")
+
+
+def _round_matches(live, boot, players, owner_by_element):
+    """Every Premier League match in the live gameweek, livescore-style,
+    with each side's players who got minutes in *that* match. Per-match
+    stats come from the fixture's own stat lists (goals, cards, bonus,
+    DEFCON...) and each player's per-fixture "explain" entry (minutes,
+    clean sheet, points), so a double gameweek splits correctly.
+    """
+    teams = {t["id"]: t for t in boot.get("teams", [])}
+    elem_team = {p["id"]: p.get("team") for p in boot.get("elements", [])}
+    per_fixture = {}  # fixture id -> {element: {"minutes", "clean_sheets", "points"}}
+    for el, v in (live.get("elements") or {}).items():
+        for entries, fid in (v or {}).get("explain") or []:
+            row = per_fixture.setdefault(fid, {}).setdefault(int(el), {"minutes": 0, "clean_sheets": 0, "points": 0})
+            for e in entries:
+                row["points"] += e.get("points", 0) or 0
+                if e.get("stat") in ("minutes", "clean_sheets"):
+                    row[e["stat"]] += e.get("value", 0) or 0
+
+    matches = []
+    for f in sorted(live.get("fixtures") or [], key=lambda f: (f.get("kickoff_time") or "", f.get("id") or 0)):
+        fid = f.get("id")
+        stat_by_el = {}
+        for s in f.get("stats") or []:
+            if s.get("s") in MATCH_STATS:
+                for side in ("h", "a"):
+                    for item in s.get(side) or []:
+                        stat_by_el.setdefault(item["element"], {})[s["s"]] = item.get("value", 0) or 0
+        if f.get("finished") or f.get("finished_provisional"):
+            status = "ft"
+        elif f.get("started"):
+            status = "live"
+        else:
+            status = "upcoming"
+
+        def side(team_id, score):
+            rows = []
+            for el, base in (per_fixture.get(fid) or {}).items():
+                if base["minutes"] <= 0 or elem_team.get(el) != team_id:
+                    continue
+                info = players.get(el, {})
+                rows.append({"id": el, "name": info.get("name", f"Player {el}"), "pos": info.get("pos", "?"),
+                             "owner_entry_id": owner_by_element.get(el), **base,
+                             **{k: stat_by_el.get(el, {}).get(k, 0) for k in MATCH_STATS}})
+            rows.sort(key=lambda r: (-r["points"], -r["minutes"], r["name"]))
+            t = teams.get(team_id, {})
+            return {"short": t.get("short_name", "?"), "name": t.get("name", "?"),
+                    "score": score if status != "upcoming" else None, "players": rows}
+
+        matches.append({"id": fid, "kickoff": f.get("kickoff_time"), "status": status,
+                        "home": side(f.get("team_h"), f.get("team_h_score")),
+                        "away": side(f.get("team_a"), f.get("team_a_score"))})
+    return matches
 
 
 SUGGEST_UNAVAILABLE = {"i", "s", "u"}   # injured, suspended, unavailable (e.g. left the league)

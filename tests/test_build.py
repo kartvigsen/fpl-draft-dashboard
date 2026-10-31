@@ -982,6 +982,99 @@ class TransferSuggestionsTest(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
+class RoundMatchesTest(unittest.TestCase):
+    """The Live round tab's livescore list: every match in the gameweek,
+    with each side's players and their stats from *that* match."""
+
+    BOOT = {"teams": [{"id": 1, "short_name": "AAA", "name": "Alpha"},
+                      {"id": 2, "short_name": "BBB", "name": "Beta"},
+                      {"id": 3, "short_name": "CCC", "name": "Gamma"}],
+            "elements": [{"id": 10, "team": 1}, {"id": 11, "team": 1}, {"id": 20, "team": 2},
+                         {"id": 21, "team": 2}, {"id": 30, "team": 3}]}
+    PLAYERS = {10: {"name": "Striker", "pos": "FWD"}, 11: {"name": "Keeper", "pos": "GKP"},
+               20: {"name": "Defender", "pos": "DEF"}, 21: {"name": "Sub", "pos": "MID"},
+               30: {"name": "Other", "pos": "MID"}}
+
+    def explain(self, fid, minutes, points, clean=0):
+        entries = [{"stat": "minutes", "value": minutes, "points": 2 if minutes >= 60 else (1 if minutes else 0)}]
+        if clean:
+            entries.append({"stat": "clean_sheets", "value": 1, "points": points - entries[0]["points"]})
+        elif points > entries[0]["points"]:
+            entries.append({"stat": "goals_scored", "value": 1, "points": points - entries[0]["points"]})
+        return [entries, fid]
+
+    def live(self):
+        return {
+            "fixtures": [
+                {"id": 2, "kickoff_time": "2026-11-01T15:00:00Z", "team_h": 3, "team_a": 1, "started": False,
+                 "finished": False, "finished_provisional": False, "team_h_score": None, "team_a_score": None, "stats": []},
+                {"id": 1, "kickoff_time": "2026-10-31T12:30:00Z", "team_h": 1, "team_a": 2, "started": True,
+                 "finished": False, "finished_provisional": True, "team_h_score": 2, "team_a_score": 0, "stats": [
+                    {"s": "goals_scored", "h": [{"element": 10, "value": 1}], "a": []},
+                    {"s": "own_goals", "h": [], "a": [{"element": 20, "value": 1}]},
+                    {"s": "bonus", "h": [{"element": 10, "value": 3}], "a": []},
+                    {"s": "defensive_contribution", "h": [], "a": [{"element": 20, "value": 9}]},
+                    {"s": "yellow_cards", "h": [], "a": [{"element": 20, "value": 1}]},
+                    {"s": "bps", "h": [{"element": 10, "value": 40}], "a": []}]},
+                {"id": 3, "kickoff_time": "2026-11-02T20:00:00Z", "team_h": 2, "team_a": 3, "started": True,
+                 "finished": False, "finished_provisional": False, "team_h_score": 1, "team_a_score": 0, "stats": [
+                    {"s": "goals_scored", "h": [{"element": 20, "value": 1}], "a": []}]},
+            ],
+            "elements": {
+                "10": {"explain": [self.explain(1, 90, 10)]},
+                "11": {"explain": [self.explain(1, 90, 6, clean=1)]},
+                # A double gameweek: the defender plays fixtures 1 and 3.
+                "20": {"explain": [self.explain(1, 90, 2), self.explain(3, 70, 7)]},
+                "21": {"explain": [self.explain(1, 0, 0)]},
+                "30": {"explain": [self.explain(3, 90, 2)]},
+            },
+        }
+
+    def matches(self):
+        return build_stats._round_matches(self.live(), self.BOOT, self.PLAYERS, {10: 201})
+
+    def test_matches_are_in_kickoff_order_with_status_and_scores(self):
+        m = self.matches()
+        self.assertEqual([x["id"] for x in m], [1, 2, 3])
+        self.assertEqual([x["status"] for x in m], ["ft", "upcoming", "live"])
+        self.assertEqual((m[0]["home"]["name"], m[0]["home"]["score"], m[0]["away"]["score"]), ("Alpha", 2, 0))
+        self.assertIsNone(m[1]["home"]["score"])  # not kicked off: no score yet
+        self.assertEqual(m[1]["home"]["players"], [])
+
+    def test_players_carry_their_own_match_stats_and_owner(self):
+        home = {p["name"]: p for p in self.matches()[0]["home"]["players"]}
+        striker = home["Striker"]
+        self.assertEqual((striker["minutes"], striker["points"], striker["goals_scored"], striker["bonus"]), (90, 10, 1, 3))
+        self.assertEqual(striker["owner_entry_id"], 201)
+        self.assertEqual(home["Keeper"]["clean_sheets"], 1)
+        self.assertNotIn("bps", striker)  # only the stats the overview shows
+
+    def test_players_without_minutes_in_the_match_are_left_out(self):
+        away = [p["name"] for p in self.matches()[0]["away"]["players"]]
+        self.assertEqual(away, ["Defender"])  # the unused sub isn't listed
+
+    def test_a_double_gameweek_player_is_split_by_match(self):
+        m = self.matches()
+        first = m[0]["away"]["players"][0]
+        second = m[2]["home"]["players"][0]
+        self.assertEqual((first["minutes"], first["points"], first["own_goals"], first["defensive_contribution"],
+                          first["yellow_cards"], first["goals_scored"]), (90, 2, 1, 9, 1, 0))
+        self.assertEqual((second["minutes"], second["points"], second["goals_scored"], second["own_goals"]), (70, 7, 1, 0))
+
+    def test_players_are_sorted_by_points_then_minutes(self):
+        home = [p["name"] for p in self.matches()[0]["home"]["players"]]
+        self.assertEqual(home, ["Striker", "Keeper"])
+
+    def test_build_includes_matches_in_the_current_round(self):
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            write_live_round_fixture(tmp)
+            d = build_stats.build(tmp)
+            self.assertIn("matches", d["current_round"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
 class AllPlayersTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
