@@ -16,7 +16,7 @@ python3 update.py
 
 Then open `docs/index.html` in a browser. That is the whole routine.
 
-The dashboard has eleven tabs: Overview, Live round, Rounds, Team info, Transactions, Fixtures, All players, Table of justice, Streaks & badges, Weekly awards and Head-to-head. You can link straight to one, for example `index.html#rounds`.
+The dashboard has nine tabs: Overview, Live round, Rounds, Team info, Transactions, Fixtures, All players, Table of justice and Streaks & badges. You can link straight to one, for example `index.html#rounds`.
 
 - Run it any time, including while a gameweek is still in progress — standings and each manager's total points update live. Records and "rounds won" still only count once a gameweek finishes, since bonus points and other adjustments aren't final until then.
 - Finished gameweeks are cached in `data/raw/`, so later runs only download the newest gameweek.
@@ -137,14 +137,6 @@ The season standings re-ranked by total points **including bench points** — wh
 ## Streaks & badges tab
 
 Switch between managers to see hot and cold runs (current and best win streaks, top-2 finishes, and the worst run of last-place finishes), the latest 100-point milestone crossed, and season-long badges (Most round wins, Highest average, Mr. Consistent for lowest week-to-week variance, Rollercoaster for the highest, Bench waster, Market mover, Most bids rejected, and a win-streak badge once someone's strung together more than one). A badge is awarded to every manager tied for the lead, not just the first one found.
-
-## Weekly awards tab
-
-Five trophies for whichever gameweek you step to with the arrows (defaults to the latest finished one): **Top scorer**, **Wooden spoon**, **Bench flop** (most points left on the bench), and **Climber**/**Faller of the week** (biggest rank swing from the previous gameweek — not shown on the first gameweek, since there's nothing to compare against). Nothing captain-based; this league doesn't use captains or bonuses.
-
-## Head-to-head tab
-
-Pick any two managers to see how they'd have fared as a straight head-to-head: a weeks-won record (finished gameweeks only), a cumulative points chart (extends to the live gameweek in progress, same as the Rounds and Overview charts), and a season-totals comparison for points, bench points and moves made. Picking the same manager in both dropdowns bumps the second one to the next available manager automatically.
 
 ## Weekly digest email
 
