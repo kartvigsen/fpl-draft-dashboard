@@ -44,6 +44,7 @@ class CollectTest(unittest.TestCase):
         if base == collect.CLASSIC_BASE:
             if path == "bootstrap-static/": f = "__classic_bootstrap__"
             elif path == "fixtures/?future=1": f = "fixtures.json"
+            elif path.startswith("fixtures/?event="): return []
             else: raise AssertionError("unexpected classic endpoint " + path)
             if f == "__classic_bootstrap__":
                 return {"teams": json.loads((self.api / "classic_teams.json").read_text())}
