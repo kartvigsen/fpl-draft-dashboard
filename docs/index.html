@@ -72,6 +72,15 @@ button.ghost:hover { background: var(--wash); }
 .tile .value { font-size: 26px; font-weight: 650; line-height: 1.1; margin: 0; overflow-wrap: anywhere; }
 .tile .value.small { font-size: 18px; }
 .tile .note { color: var(--ink-2); font-size: 12.5px; margin: 6px 0 0; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+  .tile { padding: 10px; border-radius: 12px; }
+  .tile .label { font-size: 11px; margin-bottom: 4px; }
+  .tile .value { font-size: 20px; }
+  .tile .value.small { font-size: 15px; }
+  .tile .value, .tile .note { overflow-wrap: break-word; }
+  .tile .note { font-size: 11px; margin-top: 4px; }
+}
 .card { padding: 16px; margin-bottom: 12px; min-width: 0; }
 .grid2 { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
 .chart { position: relative; margin-top: 8px; min-height: 120px; }
@@ -199,6 +208,11 @@ details .tbl-wrap { margin-top: 8px; }
 .sg-fx { flex: none; display: flex; gap: 2px; }
 .sg-chip { width: 17px; height: 20px; line-height: 20px; text-align: center; border-radius: 4px; font-size: 10.5px; font-weight: 700; background: var(--wash); color: var(--ink-2); }
 .sg-foot { margin-top: 12px; }
+details.info { margin: 0 0 10px; }
+details.info summary { color: var(--ink-2); font-size: 13px; cursor: pointer; list-style: none; }
+details.info summary::-webkit-details-marker { display: none; }
+details.info .info-i { margin-left: 6px; color: var(--muted); }
+details.info[open] .sub { margin-top: 6px; }
 .player-chip:not(.played) { opacity: .5; box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); }
 .player-chip .nm { font-weight: 700; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .player-chip .cl { color: #6b6a65; font-size: 10px; }
@@ -569,9 +583,8 @@ const lastFin = meta.last_finished_gw;
 app.append(h("header", { class: "top" },
   h("div", {},
     h("h1", {}, meta.league_name),
-    h("p", { class: "sub" }, lastFin ? `After gameweek ${lastFin}` : "No gameweek finished yet",
-      meta.current_gw && !meta.current_gw_finished ? ` · gameweek ${meta.current_gw} in progress (live, not yet final)` : "",
-      genText ? ` · updated ${genText}` : "")),
+    h("p", { class: "sub" }, meta.current_gw && !meta.current_gw_finished ? `GW${meta.current_gw} live`
+      : lastFin ? `After GW${lastFin}` : "No gameweek finished yet", genText ? ` · updated ${genText}` : "")),
   h("div", { class: "hdr-actions" },
     h("button", { class: "ghost", type: "button", onclick: toggleTheme }, "Light / dark"))));
 
@@ -651,7 +664,7 @@ pg.append(tiles);
 /* standings */
 pg.append(section("Standings"));
 if (D.live_round) pg.append(h("p", { class: "sub" },
-  `Pts includes GW${D.live_round.gw}'s live score, which isn't final yet. Rounds won and records only count once a gameweek finishes.`));
+  `Pts include live GW${D.live_round.gw}.`));
 {
   const head = ["Team", "Pts", "Avg", "Rounds won", "Best", "Worst", "Moves", "Bench pts"];
   const body = ranked.map(m => {
@@ -672,7 +685,6 @@ if (D.live_round) pg.append(h("p", { class: "sub" },
 
 /* rounds */
 pg = panels.rounds;
-pg.append(section("Round by round"));
 if (!gws.length) pg.append(emptyMsg("Charts appear after the first gameweek is finished."));
 else {
   const series = M.map(m => ({ m, values: finishedRounds.map(r => r.scores[m.entry_id]) }));
@@ -692,7 +704,7 @@ else {
   const chartSeries = M.map(m => ({ m, values: valuesByEntry[m.entry_id] }));
   const roundRowLabel = (g, i) => (D.live_round && i === chartGws.length - 1 ? `GW${g} live` : `GW${g}`);
   const host1 = h("div", { class: "chart" });
-  pg.append(card("Points per round", `Highest and lowest round are labelled (finished rounds only).${D.live_round ? " The live round in progress is also shown." : ""} Hover or use the arrow keys to read every round.`,
+  pg.append(card("Points per round", null,
     legend(M), host1,
     tableView(["GW", ...M.map(nameOf)], chartGws.map((g, i) => [roundRowLabel(g, i), ...M.map(m => valuesByEntry[m.entry_id][i])]))));
   lineChart(host1, { xs: chartGws, series: chartSeries, label: "Points per round for each manager",
@@ -714,13 +726,13 @@ else {
   });
   if (D.live_round) rows.push(h("tr", { class: "live" }, h("td", {}, `GW${D.live_round.gw} live`),
     M.map(m => h("td", { class: "num" }, D.live_round.scores[m.entry_id] ?? "–"))));
-  pg.append(card("Every round", "▲ top score of the round (ties are shared), ▼ lowest score. Cells are shaded from red to green on the same scale across every round and manager, so colours are comparable table-wide, not just within a row. The live round is not counted.",
+  pg.append(card("Every round", "▲ top score · ▼ lowest score",
     h("div", { class: "tbl-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Round"), M.map(m =>
       h("th", {}, h("span", { class: "who" }, dot(m), nameOf(m)))))), h("tbody", {}, rows)))));
 
   /* trends */
   pg = panels.overview;
-  pg.append(section("Trends"));
+  pg.append(section("Trends"), legend(M));
   const cumHost = h("div", { class: "chart" }), rankHost = h("div", { class: "chart" });
   // The live round's total/rank already fold in its provisional score (same
   // figures as the Standings table), so these two charts can show it as one
@@ -732,9 +744,9 @@ else {
     D.live_round ? [...D.trends.rank[m.entry_id], PM[m.entry_id].rank] : D.trends.rank[m.entry_id]]));
   const trendRowLabel = (g, i) => (D.live_round && i === trendGws.length - 1 ? `GW${g} live` : `GW${g}`);
   pg.append(h("div", { class: "grid2" },
-    card("Total points", `Running total after each finished round${D.live_round ? ", plus the live round in progress" : ""}.`, legend(M), cumHost,
+    card("Total points", null, cumHost,
       tableView(["GW", ...M.map(nameOf)], trendGws.map((g, i) => [trendRowLabel(g, i), ...M.map(m => cumByEntry[m.entry_id][i])]))),
-    card("Position in the league", `Rank after each finished round${D.live_round ? ", plus the live round in progress" : ""}. Tied managers share a rank.`, legend(M), rankHost,
+    card("Position in the league", null, rankHost,
       tableView(["GW", ...M.map(nameOf)], trendGws.map((g, i) => [trendRowLabel(g, i), ...M.map(m => "#" + rankByEntry[m.entry_id][i])])))));
   lineChart(cumHost, { xs: trendGws, series: M.map(m => ({ m, values: cumByEntry[m.entry_id] })), label: "Running total points", height: 260 });
   lineChart(rankHost, { xs: trendGws, series: M.map(m => ({ m, values: rankByEntry[m.entry_id] })), rank: M.length, label: "League position after each round", height: 260 });
@@ -752,7 +764,7 @@ else {
     recRows.push(["Longest winning streak", `${st.length} round${st.length > 1 ? "s" : ""}`, `${nameOf(byId[st.entry_id])}, GW${st.from}–${st.to}`]);
   }
   pg.append(h("div", { class: "grid2" },
-    card("Rounds won", "Top score of the round among all managers. Ties count for everyone tied.",
+    card("Rounds won", null,
       barList(ranked.map(m => ({ m, value: PM[m.entry_id].wins, note: `${PM[m.entry_id].lows} lowest-scoring round${PM[m.entry_id].lows === 1 ? "" : "s"}` })), "rounds won")),
     card("Records", null, h("div", { class: "tbl-wrap" }, h("table", {}, h("tbody", {},
       recRows.map(r => h("tr", {}, h("td", { class: "l" }, r[0]), h("td", { class: "num win" }, r[1]), h("td", { class: "l" }, r[2])))))))));
@@ -799,11 +811,11 @@ pg = panels.transactions;
     }
     paintSuggestions();
     pg.append(card("Transfer suggestions",
-      `Like-for-like swaps for GW${TS.next_gw}: each team's weakest players against the best available free agents in the same position. Outlook = form (FPL's average points per game over the last 30 days), +1 for each step the next five fixtures are easier than average and −1 for each step harder. Injured and suspended free agents are left out; an unavailable squad player counts as 0. The coloured squares are the next five fixtures' difficulty (1 easiest, 5 hardest).`,
+      null,
+      h("details", { class: "info" }, h("summary", {}, `Like-for-like swaps for GW${TS.next_gw}`, h("span", { class: "info-i", "aria-hidden": "true" }, "ⓘ")),
+        h("p", { class: "sub" }, `Like-for-like swaps for GW${TS.next_gw}: each team's weakest players against the best available free agents in the same position. Outlook = form (FPL's average points per game over the last 30 days), +1 for each step the next five fixtures are easier than average and −1 for each step harder. Injured and suspended free agents are left out; an unavailable squad player counts as 0. The coloured squares are the next five fixtures' difficulty (1 easiest, 5 hardest).`)),
       h("div", { class: "teamtabs", role: "tablist" }, sgTabs), sgHost,
-      h("p", { class: "sub sg-foot" }, "Make the move in the ",
-        h("a", { href: "https://draft.premierleague.com/", target: "_blank", rel: "noopener" }, "official FPL Draft app"),
-        TS.transaction_mode === "waivers" ? ". Your league uses waivers, so these go in as waiver claims." : ".")));
+      h("p", { class: "sub sg-foot" }, h("a", { href: "https://draft.premierleague.com/", target: "_blank", rel: "noopener" }, "Open FPL Draft app ↗"))));
   }
   const rows = ranked.map(m => ({ m, value: PM[m.entry_id].tx_accepted,
     note: `${PM[m.entry_id].tx_free_agent} free agent · ${PM[m.entry_id].tx_waiver} waiver · ${PM[m.entry_id].tx_denied} denied` }));
@@ -812,8 +824,8 @@ pg = panels.transactions;
   const heatRows = ranked.map(m => h("tr", {}, h("td", { class: "l" }, h("span", { class: "who" }, dot(m), nameOf(m))),
     allG.map(g => heatCell(T.matrix[m.entry_id][g] || 0, maxCell, `${nameOf(m)}, GW${g}: ${T.matrix[m.entry_id][g] || 0} accepted`))));
   const moves = T.moves;
-  pg.append(card("Accepted transactions", "Free-agent pickups and waiver wins that went through. Denied bids are listed under each team.", barList(rows, "moves")));
-  pg.append(card("Moves per gameweek", "Accepted moves by round. Darker means more.",
+  pg.append(card("Accepted transactions", null, barList(rows, "moves")));
+  pg.append(card("Moves per gameweek", null,
     h("div", { class: "tbl-wrap" }, h("table", { class: "heat" },
       h("thead", {}, h("tr", {}, h("th", { class: "l" }, ""), allG.map(g => h("th", {}, g)))),
       h("tbody", {}, heatRows)))));
@@ -868,7 +880,7 @@ pg = panels.transactions;
   const more = h("button", { class: "ghost", type: "button", style: "margin-top:10px",
     onclick: () => { showAll = !showAll; paint(); } }, "Show all");
   paint();
-  pg.append(card("All moves", "Newest first.",
+  pg.append(card("All moves", null,
     h("div", { class: "filters" }, teamSel, typeSel, resultSel, gwSel, nameInput),
     h("div", { class: "tbl-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["GW", "Team", "Type", "Result", "In", "Out"].map((x, i) =>
       h("th", { class: i < 6 ? "l" : "" }, x)))), body)), more));
@@ -921,7 +933,7 @@ if (gws.length) {
       const m = byId[activeEntryId];
       const all = P.scorers_by_manager[activeEntryId] || [];
       teamHost.textContent = "";
-      teamHost.append(card(nameOf(m), "All players who scored while in the starting XI, including the live gameweek. Click a column to sort. A green “Squad” label means that player is still on the squad (including the bench).",
+      teamHost.append(card(nameOf(m), null,
         all.length ? scorerTable(all) : emptyMsg("No players have scored yet.")));
     }
     paintTeam();
@@ -946,9 +958,9 @@ if (gws.length) {
     { label: "Points", get: p => p.points },
   ]) || emptyMsg("No player has scored from a bench yet.");
   pg.append(h("div", { class: "grid2" },
-    card("Points left on the bench", "Points scored by players who were not in the starting XI after automatic substitutions.", barList(benchRows, "bench points")),
-    card("Biggest bench misses", "Most points scored by a player while on a manager's bench in one round. Finished rounds only.", missedTable)));
-  pg.append(card("Biggest single-player rounds", `Best individual scores from players in a starting XI.${D.live_round ? " Includes the live round in progress, which isn't final yet." : ""}`,
+    card("Points left on the bench", null, barList(benchRows, "bench points")),
+    card("Biggest bench misses", null, missedTable)));
+  pg.append(card("Biggest single-player rounds", null,
     rankedList(P.best_rounds.slice(0, 6), [
       { label: "Player", get: p => p.name },
       { label: "Manager", get: p => h("span", { class: "who" }, dot(byId[p.entry_id]), nameOf(byId[p.entry_id])) },
@@ -959,14 +971,11 @@ if (gws.length) {
 
 /* live round */
 pg = panels.liveround;
-pg.append(section("Live round"));
 {
   const CR = D.current_round;
   if (!CR) {
     pg.append(emptyMsg("Appears once the first gameweek has started."));
   } else {
-    pg.append(h("p", { class: "sub" },
-      `Gameweek ${CR.gw}${CR.finished ? " (finished)" : " (in progress)"} — updates a few times a day, not in real time.`));
 
     const POS_ORDER = ["GKP", "DEF", "MID", "FWD"];
     // 3 green, 2 blue, 1 purple; a double gameweek can exceed 3, shown as green.
@@ -1039,7 +1048,7 @@ pg.append(section("Live round"));
         h("p", { class: "sub" }, "Bench"), h("div", { class: "bench-row" }, t.bench.map(chip))));
     }
     paintPitch();
-    pg.append(card("Team lineups", "Captain (C) and vice-captain (V) are marked; faded players haven't played this round (yet). Click a team to switch, or a player for their full stats.",
+    pg.append(card("Team lineups", null,
       h("div", { class: "teamtabs", role: "tablist" }, tabs), pitchHost), modalBackdrop);
 
     /* matches (livescore) */
@@ -1129,7 +1138,7 @@ pg.append(section("Live round"));
           hs || as ? h("span", { class: "mx-scorers h" }, hs) : null,
           hs || as ? h("span", { class: "mx-scorers a" }, as) : null));
       }
-      pg.append(card("Matches", `Every Premier League match in gameweek ${CR.gw}. Tap a match for its players' minutes, goals, assists, clean sheets, DEFCON, bonus and points.`,
+      pg.append(card("Matches", null,
         h("div", { class: "mx-list" }, rows)));
     }
 
@@ -1195,7 +1204,7 @@ pg.append(section("Live round"));
       thead.textContent = ""; thead.append(sorter.row(render));
     }
     render();
-    pg.append(card("Every player, this round", "Every Premier League player's points and extra stats for the current round, highest first. Filter by owner, club or position.",
+    pg.append(card("Every player, this round", null,
       h("div", { class: "filters" }, ownerSel, clubSel, posSel), countNote,
       h("div", { class: "tbl-wrap" }, h("table", {}, thead, body)), more));
   }
@@ -1221,20 +1230,24 @@ pg = panels.allplayers;
   ];
   const sorter = makeSortHeader(COLS, "total_points", -1);
 
-  const ownerSel = h("select", { "aria-label": "Filter by owner", onchange: () => render() },
+  const ownerSel = h("select", { "aria-label": "Filter by owner", onchange: () => { showAll = false; render(); } },
     h("option", { value: "" }, "All owners"), h("option", { value: "free" }, "Free agent"),
     ranked.map(m => h("option", { value: m.entry_id }, nameOf(m))));
-  const posSel = h("select", { "aria-label": "Filter by position", onchange: () => render() },
+  const posSel = h("select", { "aria-label": "Filter by position", onchange: () => { showAll = false; render(); } },
     h("option", { value: "" }, "All positions"), positions.map(p => h("option", { value: p }, p)));
-  const clubSel = h("select", { "aria-label": "Filter by club", onchange: () => render() },
+  const clubSel = h("select", { "aria-label": "Filter by club", onchange: () => { showAll = false; render(); } },
     h("option", { value: "" }, "All clubs"), clubs.map(c => h("option", { value: c }, c)));
-  const nameInput = h("input", { type: "search", placeholder: "Player name", "aria-label": "Filter by player name", oninput: () => render() });
-  const everyoneToggle = h("input", { type: "checkbox", onchange: () => { showEveryone = everyoneToggle.checked; render(); } });
+  const nameInput = h("input", { type: "search", placeholder: "Player name", "aria-label": "Filter by player name", oninput: () => { showAll = false; render(); } });
+  const everyoneToggle = h("input", { type: "checkbox", onchange: () => { showEveryone = everyoneToggle.checked; showAll = false; render(); } });
   everyoneToggle.checked = true;
 
   const thead = h("thead", {});
   const body = h("tbody", {});
   const countNote = h("p", { class: "sub" });
+  const LIM = 20;
+  let showAll = false;
+  const more = h("button", { class: "ghost", type: "button", style: "margin-top:10px",
+    onclick: () => { showAll = !showAll; render(); } });
 
   function row(p) {
     return h("tr", {},
@@ -1259,12 +1272,13 @@ pg = panels.allplayers;
     const sorted = sorter.sorted(filtered());
     body.textContent = "";
     if (!sorted.length) body.append(h("tr", {}, h("td", { class: "l", colspan: COLS.length }, emptyMsg("No players match these filters."))));
-    else body.append(...sorted.map(row));
-    countNote.textContent = `${fmt(sorted.length)} of ${fmt(AP.length)} players shown.`;
+    else body.append(...(showAll ? sorted : sorted.slice(0, LIM)).map(row));
+    more.hidden = sorted.length <= LIM;
+    more.textContent = showAll ? "Show fewer" : `Show all ${fmt(sorted.length)}`;
+    countNote.textContent = `${fmt(sorted.length)} of ${fmt(AP.length)} players`;
     thead.textContent = ""; thead.append(sorter.row(render));
   }
   render();
-  pg.append(section("All players"));
   {
     const RANK_BRACKETS = [
       [1, 10, "1–10"], [11, 20, "11–20"], [21, 30, "21–30"], [31, 40, "31–40"],
@@ -1278,22 +1292,21 @@ pg = panels.allplayers;
     const rows = RANK_BRACKETS.map(([, , label], bi) => h("tr", {}, h("td", { class: "l" }, label),
       ranked.map((m, mi) => heatCell(counts[mi][bi], maxCell,
         `${nameOf(m)}, rank ${label}: ${counts[mi][bi]} player${counts[mi][bi] === 1 ? "" : "s"}`))));
-    pg.append(card("Squad by overall rank bracket", `How each manager's current squad (including the bench) ranks among all ${AP.length} Premier League players by season total points. "1–10" means their players are the 1st-to-10th highest scorers in the whole player pool — not players who scored 1 to 10 points. Darker means more players; sort the table below by Total points to see the full ranking.`,
+    pg.append(card("Squad by overall rank bracket", `Each squad by season-points rank among all ${AP.length} players.`,
       h("div", { class: "tbl-wrap" }, h("table", { class: "heat" },
         h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Rank"), ranked.map(m => h("th", {}, nameOf(m))))),
         h("tbody", {}, rows)))));
   }
-  pg.append(card("Every Premier League player", "Filter, search and sort by clicking a column. Shows every player by default; untick below to only see players who are or have been owned in this league this season.",
+  pg.append(card("Every Premier League player", null,
     h("div", { class: "filters" }, ownerSel, posSel, clubSel, nameInput),
     h("label", { style: "display:flex;align-items:center;gap:6px;margin:2px 0 12px;font-size:13px;color:var(--ink-2)" },
       everyoneToggle, "Show every player, including ones never owned this season"),
     countNote,
-    h("div", { class: "tbl-wrap" }, h("table", {}, thead, body))));
+    h("div", { class: "tbl-wrap" }, h("table", {}, thead, body)), more));
 }
 
 /* fixtures */
 pg = panels.fixtures;
-pg.append(section("Fixtures"));
 {
   const FT = D.fixtures_by_team || [];
   if (!FT.length) {
@@ -1375,7 +1388,7 @@ pg.append(section("Fixtures"));
       body.textContent = "";
       if (!sorted.length) body.append(h("tr", {}, h("td", { class: "l", colspan: String(2 + includedCount) }, emptyMsg("No teams match these filters."))));
       else body.append(...sorted.map(row));
-      countNote.textContent = `${fmt(sorted.length)} of ${fmt(FT.length)} teams shown, ranked by average fixture difficulty over the ticked rounds.`;
+      countNote.textContent = `${fmt(sorted.length)} of ${fmt(FT.length)} teams`;
       thead.textContent = "";
       const tr = sorter.row(render);
       for (let i = 0; i < maxCols; i++) if (included[i]) tr.append(h("th", {}, `Fixture ${i + 1}`));
@@ -1386,10 +1399,10 @@ pg.append(section("Fixtures"));
     const legendSwatch = (d, label) => h("li", {},
       h("span", { style: `display:inline-block;min-width:20px;height:20px;line-height:20px;text-align:center;border-radius:5px;font-weight:650;font-size:11px;background:${fdrColor(d)};color:${fdrInk(d)}` }, d),
       label);
-    pg.append(card("Next fixtures", "Each team's next five Premier League fixtures, coloured by that team's own difficulty rating (1 = easiest, 5 = hardest). ★ marks a fixture where this team is the stronger side, comparing both teams' home/away strength ratings. Ranked by average difficulty across the ticked rounds — click “Avg FDR” or “Team” to re-sort, or show just the 5 easiest or hardest schedules below.",
-      h("ul", { class: "legend" }, [1, 2, 3, 4, 5].map(d => legendSwatch(d, d === 1 ? "Easy" : d === 5 ? "Hard" : ""))),
+    pg.append(card("Next fixtures", null,
+      h("ul", { class: "legend" }, [1, 2, 3, 4, 5].map(d => legendSwatch(d, d === 1 ? "Easy" : d === 5 ? "Hard" : "")), h("li", {}, "★ stronger side")),
       h("div", { class: "filters" }, showSel),
-      h("p", { class: "sub", style: "margin:10px 0 4px" }, "Rounds included in the ranking:"),
+      h("p", { class: "sub", style: "margin:10px 0 4px" }, "Rounds in the ranking:"),
       h("div", { style: "display:flex;flex-wrap:wrap;gap:12px;margin:2px 0 12px" }, roundToggles),
       countNote,
       h("div", { class: "tbl-wrap" }, h("table", { class: "fdr heat" }, thead, body))));
@@ -1398,9 +1411,9 @@ pg.append(section("Fixtures"));
 
 /* footer + checks */
 const chk = D.checks;
-const foot = h("div", { class: "foot" },
-  h("p", {}, "How the numbers work: a round score is the total of a manager's starting XI after automatic substitutions. Standings and total points update live while a gameweek is in progress; rounds won and records only count once it finishes. Ties for the top score count as a win for every tied manager. Transactions count accepted moves only."),
-  h("p", {}, "Data comes from the public FPL Draft API, which is unofficial and can change without notice."));
+const foot = h("div", { class: "foot" }, h("details", {}, h("summary", {}, "How it works"),
+  h("p", {}, "A round score is the total of a manager's starting XI after automatic substitutions. Standings and total points update live while a gameweek is in progress; rounds won and records only count once it finishes. Ties for the top score count as a win for every tied manager. Transactions count accepted moves only."),
+  h("p", {}, "Data comes from the public FPL Draft API, which is unofficial and can change without notice.")));
 const dl = h("details", {}, h("summary", {}, chk.all_ok ? "Data checks: all passed" : "Data checks: please review"));
 const matchLabel = m => m === "through_finished_plus_live_unsubbed" ? "Match (site's live round isn't subbed yet)"
   : m ? "Match" : "DIFFERENT";

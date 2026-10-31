@@ -73,6 +73,8 @@ To stop it, disable the job in the scheduler, or delete the token in GitHub; a d
 
 **Add to Home Screen:** the site is installable as an app icon on phones (`docs/manifest.json`, `docs/icons/`, `docs/sw.js`). On iOS, open the site in Safari and use Share → "Add to Home Screen"; on Android/Chrome, use the browser menu's "Install app" / "Add to Home screen". It opens without browser chrome and uses the site's blue bar-chart icon.
 
+**Compact layout:** the page keeps explanatory text to a minimum: charts and tables carry no subtitles, the Transfer suggestions explanation opens from its ⓘ line, and "How it works" at the bottom of the page opens on tap. The All players table also shows the top 20 first, with "Show all" to expand.
+
 ## Rules used
 
 - **Standings and total points:** update live while a gameweek is in progress, using that round's provisional score. The Standings table marks a live contribution with a small "(+N live)" next to a manager's points, and a note explains it while a round is in progress. The Overview tab's "Total points" and "Position in the league" charts extend one point further to show the live round too, labelled "GW_ live".
