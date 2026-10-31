@@ -356,10 +356,14 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn("D.live_round.scores[s.m.entry_id] ?? 0", HTML)
         self.assertIn("xs: chartGws, series: chartSeries", HTML)
 
+    def test_weekly_awards_and_head_to_head_tabs_are_gone(self):
+        for gone in ('"awards"', '"h2h"', "Weekly awards", "Head-to-head", "panels.awards", "panels.h2h", ".award {"):
+            self.assertNotIn(gone, HTML)
+
     def test_tab_order_matches_the_requested_layout(self):
         tabs_line = re.search(r'const TABS = \[.*?\];', HTML).group(0)
         order = [k for k in re.findall(r'\["(\w+)",', tabs_line)]
-        self.assertEqual(order, ["overview", "liveround", "rounds", "players", "transactions", "fixtures", "allplayers", "justice", "streaks", "awards", "h2h"])
+        self.assertEqual(order, ["overview", "liveround", "rounds", "players", "transactions", "fixtures", "allplayers", "justice", "streaks"])
 
     def test_players_tab_is_labeled_team_info(self):
         self.assertIn('["players", "Team info"]', HTML)
@@ -450,12 +454,12 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn("if (!gws.length) pg.append(emptyMsg(", panel)
 
     def test_streaks_tab_switches_between_managers_like_team_info(self):
-        panel = HTML[HTML.index("/* streaks & badges */"):HTML.index("/* weekly awards */")]
+        panel = HTML[HTML.index("/* streaks & badges */"):HTML.index("/* players */")]
         self.assertIn('class: "teamtab"', panel)
         self.assertIn("activeEntryId = m.entry_id; paintStreaks();", panel)
 
     def test_streaks_tab_shows_current_and_best_for_each_streak_type(self):
-        panel = HTML[HTML.index("/* streaks & badges */"):HTML.index("/* weekly awards */")]
+        panel = HTML[HTML.index("/* streaks & badges */"):HTML.index("/* players */")]
         self.assertIn("s.win[activeEntryId].current", panel)
         self.assertIn("s.win[activeEntryId].best", panel)
         self.assertIn("s.top2[activeEntryId].current", panel)
@@ -464,61 +468,13 @@ class HomeScreenInstallTest(unittest.TestCase):
     def test_streaks_tab_badges_account_for_ties(self):
         # Every badge is awarded to every manager tied for the lead, not
         # just the first one found.
-        panel = HTML[HTML.index("/* streaks & badges */"):HTML.index("/* weekly awards */")]
+        panel = HTML[HTML.index("/* streaks & badges */"):HTML.index("/* players */")]
         self.assertIn("function leadersBy(fn) {", panel)
         self.assertIn("M.filter(m => fn(PM[m.entry_id]) === best).map(m => m.entry_id)", panel)
 
     def test_streaks_tab_handles_no_finished_gameweeks_yet(self):
-        panel = HTML[HTML.index("/* streaks & badges */"):HTML.index("/* weekly awards */")]
+        panel = HTML[HTML.index("/* streaks & badges */"):HTML.index("/* players */")]
         self.assertIn("if (!gws.length) pg.append(emptyMsg(", panel)
-
-    def test_weekly_awards_has_no_captain_based_category(self):
-        panel = HTML[HTML.index("/* weekly awards */"):HTML.index("/* head to head */")]
-        self.assertIn("No captain-based awards", panel)  # the explanatory subtitle
-        for needle in ("is_captain", "is_vice_captain", "vice-captain", "Captain of the week"):
-            self.assertNotIn(needle, panel)
-
-    def test_weekly_awards_steps_through_gameweeks_defaulting_to_latest(self):
-        panel = HTML[HTML.index("/* weekly awards */"):HTML.index("/* head to head */")]
-        self.assertIn("let awardIdx = D.weekly_awards.length - 1;", panel)
-        self.assertIn("awardIdx--; paintAwards();", panel)
-        self.assertIn("awardIdx++; paintAwards();", panel)
-        self.assertIn("prevBtn.disabled = awardIdx === 0;", panel)
-        self.assertIn("nextBtn.disabled = awardIdx === D.weekly_awards.length - 1;", panel)
-
-    def test_weekly_awards_skips_climber_faller_when_absent(self):
-        panel = HTML[HTML.index("/* weekly awards */"):HTML.index("/* head to head */")]
-        self.assertIn("if (!a) continue;", panel)
-
-    def test_weekly_awards_handles_no_finished_gameweeks_yet(self):
-        panel = HTML[HTML.index("/* weekly awards */"):HTML.index("/* head to head */")]
-        self.assertIn("if (!D.weekly_awards.length) pg.append(emptyMsg(", panel)
-
-    def test_h2h_tab_defaults_to_the_top_two_ranked_managers(self):
-        panel = HTML[HTML.index("/* head to head */"):HTML.index("/* players */")]
-        self.assertIn("selA.value = ranked[0].entry_id;", panel)
-        self.assertIn("selB.value = ranked[1].entry_id;", panel)
-
-    def test_h2h_tab_guards_against_picking_the_same_manager_twice(self):
-        panel = HTML[HTML.index("/* head to head */"):HTML.index("/* players */")]
-        self.assertIn("if (a === b) {", panel)
-
-    def test_h2h_record_counts_finished_rounds_only_chart_extends_to_live(self):
-        panel = HTML[HTML.index("/* head to head */"):HTML.index("/* players */")]
-        self.assertIn("for (const r of finishedRounds) {", panel)
-        self.assertIn("if (D.live_round) {", panel)
-        self.assertIn("chartGws = [...gws, D.live_round.gw];", panel)
-
-    def test_h2h_chart_reuses_the_shared_line_chart_component(self):
-        panel = HTML[HTML.index("/* head to head */"):HTML.index("/* players */")]
-        self.assertIn("lineChart(host1,", panel)
-
-    def test_h2h_season_totals_compare_points_bench_and_moves(self):
-        panel = HTML[HTML.index("/* head to head */"):HTML.index("/* players */")]
-        self.assertIn('metricBars("Total points", "pts", a, b, p => p.total)', panel)
-        self.assertIn('metricBars("Bench points", "pts", a, b, p => p.bench_points)', panel)
-        self.assertIn('metricBars("Moves made", "moves", a, b, p => p.tx_accepted)', panel)
-
 
 if __name__ == "__main__":
     unittest.main()
