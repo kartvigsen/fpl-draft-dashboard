@@ -215,13 +215,25 @@ class HomeScreenInstallTest(unittest.TestCase):
         panel = HTML[HTML.index("/* fixtures */"):HTML.index("/* footer + checks */")]
         self.assertIn('class: "club-btn", onclick: () => openClub(t)', panel)
         self.assertIn("p.club === t.short_name", panel)
-        self.assertIn('makeSortHeader(SQUAD_COLS, "pts", -1)', panel)
+        self.assertIn('let cols = SQUAD_COLS, sorter = makeSortHeader(cols, "pts", -1);', panel)
         for key in ("p.total_points", "p.minutes", "p.goals_scored", "p.assists", "p.clean_sheets",
                     "p.defensive_contribution", "p.bonus", "p.form"):
             self.assertIn(key, panel)
         self.assertIn('["", "GKP", "DEF", "MID", "FWD"]', panel)   # position filter
         self.assertIn('"FA"', panel)                                # free agents marked
         self.assertIn("sg-flag", panel)                             # injury/doubt pill
+
+    def test_club_squad_has_keeper_saves_and_hides_zero_minute_players(self):
+        panel = HTML[HTML.index("/* fixtures */"):HTML.index("/* footer + checks */")]
+        self.assertIn('const SAVES_COL = { key: "sv", label: "Saves"', panel)
+        self.assertIn('pos === "GKP" ? [...SQUAD_COLS, SAVES_COL] : SQUAD_COLS', panel)
+        # Changing the column set keeps the current sort unless its column is gone.
+        self.assertIn("next.some(c => c.key === sorter.key)", panel)
+        self.assertIn("get key() { return sortKey; }", HTML)
+        # 0-minute players are hidden behind a toggle.
+        self.assertIn("let pos = \"\", showZero = false;", panel)
+        self.assertIn("showZero ? inPos : inPos.filter(p => p.minutes)", panel)
+        self.assertIn("with 0 minutes`", panel)
 
     def test_modal_is_shared_and_lives_outside_the_tab_panels(self):
         # A modal inside a hidden panel can't show, so it's appended to the
