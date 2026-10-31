@@ -368,6 +368,13 @@ class HomeScreenInstallTest(unittest.TestCase):
                      "D.justice", "D.streaks", "D.milestones"):
             self.assertNotIn(gone, HTML)
 
+    def test_tab_bar_only_scrolls_sideways(self):
+        # overflow-x: auto alone makes the other axis "auto" too, and a tab
+        # sticking 1px out below let the bar wobble up and down on phones.
+        self.assertIn("overflow-x: auto; overflow-y: hidden;", HTML)
+        self.assertIn("box-shadow: inset 0 -1px 0 var(--grid);", HTML)
+        self.assertNotIn("border-bottom: 2px solid transparent; margin-bottom: -1px;", HTML)
+
     def test_tab_order_matches_the_requested_layout(self):
         tabs_line = re.search(r'const TABS = \[.*?\];', HTML).group(0)
         order = [k for k in re.findall(r'\["(\w+)",', tabs_line)]
