@@ -211,6 +211,25 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn("Rounds in the ranking", HTML)
         self.assertIn("included.filter(Boolean).length <= 1", HTML)
 
+    def test_fixtures_team_opens_its_squad_sorted_by_points(self):
+        panel = HTML[HTML.index("/* fixtures */"):HTML.index("/* footer + checks */")]
+        self.assertIn('class: "club-btn", onclick: () => openClub(t)', panel)
+        self.assertIn("p.club === t.short_name", panel)
+        self.assertIn('makeSortHeader(SQUAD_COLS, "pts", -1)', panel)
+        for key in ("p.total_points", "p.minutes", "p.goals_scored", "p.assists", "p.clean_sheets",
+                    "p.defensive_contribution", "p.bonus", "p.form"):
+            self.assertIn(key, panel)
+        self.assertIn('["", "GKP", "DEF", "MID", "FWD"]', panel)   # position filter
+        self.assertIn('"FA"', panel)                                # free agents marked
+        self.assertIn("sg-flag", panel)                             # injury/doubt pill
+
+    def test_modal_is_shared_and_lives_outside_the_tab_panels(self):
+        # A modal inside a hidden panel can't show, so it's appended to the
+        # page itself and reused by the Live round and Fixtures tabs.
+        self.assertIn("app.append(foot, modalBackdrop);", HTML)
+        self.assertEqual(HTML.count('const modalBackdrop = h("div"'), 1)
+        self.assertLess(HTML.index('const modalBackdrop = h("div"'), HTML.index("const TABS ="))
+
     def test_live_round_tab_shows_a_pitch_with_captain_and_vice_captain_badges(self):
         self.assertIn('["liveround", "Live round"]', HTML)
         self.assertIn("D.current_round", HTML)

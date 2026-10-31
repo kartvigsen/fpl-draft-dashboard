@@ -26,6 +26,17 @@ DOCS = ROOT / "docs"
 POS = {1: "GKP", 2: "DEF", 3: "MID", 4: "FWD"}
 
 
+SEASON_STAT_KEYS = ("minutes", "starts", "goals_scored", "assists", "clean_sheets",
+                    "defensive_contribution", "bonus", "saves", "yellow_cards", "red_cards")
+
+
+def _num(v):
+    try:
+        return round(float(v), 1)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _load(path, default=None):
     p = Path(path)
     if not p.exists():
@@ -301,6 +312,13 @@ def build(raw=RAW, now=None):
             "avg_points": points_per_game(p),
             "draft_pick": draft_pick_by_element.get(pid_),
             "ever_owned": pid_ in ever_owned,
+            # Season totals (FPL's own, live round included) for the
+            # Fixtures tab's club squad view.
+            **{k: p.get(k, 0) or 0 for k in SEASON_STAT_KEYS},
+            "form": _num(p.get("form")),
+            "status": p.get("status") or "a",
+            "news": p.get("news") or "",
+            "chance": p.get("chance_of_playing_next_round"),
         })
     all_players.sort(key=lambda r: r["name"])
 
