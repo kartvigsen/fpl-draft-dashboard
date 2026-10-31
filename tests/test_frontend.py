@@ -33,7 +33,16 @@ class FrontendMarkupTest(unittest.TestCase):
 
     def test_standings_explains_the_live_score_when_a_round_is_in_progress(self):
         self.assertIn("if (D.live_round) pg.append(", HTML)
-        self.assertIn("`Pts include live GW${D.live_round.gw}.`", HTML)
+        self.assertIn("`Pts and bench pts include live GW${D.live_round.gw}.`", HTML)
+
+    def test_bench_views_label_the_live_round(self):
+        # Points left on the bench, Biggest bench misses and Biggest
+        # single-player rounds all mark the gameweek in progress "live".
+        self.assertIn("const liveGw = g => (D.live_round && g === D.live_round.gw ? `${g} live` : `${g}`);", HTML)
+        self.assertIn('{ label: "GW", get: p => liveGw(p.gw) },', HTML)
+        self.assertEqual(HTML.count("liveGw(p.gw)"), 2)
+        self.assertIn("(GW${liveGw(b.worst_gw.gw)})", HTML)
+        self.assertIn("`+${b.live_points} live`", HTML)
 
     def test_header_subtitle_reflects_live_not_excluded(self):
         self.assertIn("`GW${meta.current_gw} live`", HTML)
@@ -133,7 +142,8 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertNotIn('class: "plist"', section)
 
     def test_biggest_single_player_rounds_labels_the_live_round(self):
-        self.assertIn("D.live_round && p.gw === D.live_round.gw", HTML)
+        self.assertIn("rankedList(P.best_rounds", HTML)
+        self.assertIn("D.live_round && g === D.live_round.gw ? `${g} live`", HTML)
 
     def test_scorer_table_is_a_single_table_so_expanded_rows_stay_aligned(self):
         # Splitting the visible/expanded rows into two separate <table>

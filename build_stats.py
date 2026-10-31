@@ -8,7 +8,8 @@ list; round scores are derived):
   * If the API also gives an official round score, that one is used and any
     difference is reported under "checks".
   * Only FINISHED gameweeks count towards records and rounds won.
-    The gameweek in progress is shown separately as provisional.
+    The gameweek in progress is shown separately as provisional; running
+    totals, charts and bench figures fold it in, labelled "live".
   * A tied top score counts as a round won for every tied manager.
   * Transactions = accepted moves only (result "a"). Denied bids are a
     separate stat.
@@ -215,12 +216,18 @@ def build(raw=RAW, now=None):
             xi_size[(gw, eid)] = len(xi)
 
     complete = [g for g in fin_gws if all(scores[g].get(e) is not None for e in eids)]
+    # Finished rounds plus the gameweek in progress (if any). Bench figures use
+    # this so they update live, like the running totals; the live part is
+    # provisional (a bench player can still be auto-subbed in) and the
+    # frontend labels it "live".
+    live_gw = cur if (cur and not cur_done) else None
+    with_live = complete + ([live_gw] if live_gw and live_gw not in complete else [])
 
     # Points scored by a player while sitting on a manager's bench (after automatic
-    # substitutions), one row per player per round. Finished rounds only.
+    # substitutions), one row per player per round, the live round included.
     missed = []
     for (eid, gw), bench_list in bench_final.items():
-        if gw not in complete:
+        if gw not in with_live:
             continue
         for el in bench_list:
             pts = pp.get(gw, {}).get(el, 0)
@@ -443,7 +450,7 @@ def build(raw=RAW, now=None):
             "tx_free_agent": sum(1 for t in acc if t["kind"] == "f"),
             "tx_waiver": sum(1 for t in acc if t["kind"] == "w"),
             "tx_denied": sum(1 for t in mine if t["result"] != "a"),
-            "bench_points": sum(v for g, v in bench_pts[e].items() if g in complete),
+            "bench_points": sum(v for g, v in bench_pts[e].items() if g in with_live),
             "rank": None,
         }
     for e, r in _rank_desc({e: per_manager[str(e)]["total"] for e in eids}).items():
@@ -531,9 +538,10 @@ def build(raw=RAW, now=None):
 
     bench = {}
     for e in eids:
-        per_gw = {g: v for g, v in bench_pts[e].items() if g in complete}
+        per_gw = {g: v for g, v in bench_pts[e].items() if g in with_live}
         worst = max(per_gw.items(), key=lambda kv: (kv[1], -kv[0])) if per_gw else None
         bench[str(e)] = {"total": sum(per_gw.values()),
+                         "live_points": per_gw.get(live_gw) if live_gw else None,
                          "worst_gw": {"gw": worst[0], "points": worst[1]} if worst else None,
                          "by_gw": {str(g): v for g, v in per_gw.items()}}
 

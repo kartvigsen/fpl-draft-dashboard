@@ -190,7 +190,14 @@ class BuildTest(unittest.TestCase):
 
     def test_bench_points(self):
         self.assertEqual(self.d["players"]["bench"][self.m["Dan"]]["total"], 8)
-        self.assertEqual(self.d["players"]["bench"][self.m["Alex"]]["total"], 0)
+        self.assertIsNone(self.d["players"]["bench"][self.m["Dan"]]["live_points"] or None)
+        # The live GW5 counts (provisionally): 30 pts on Alex's bench.
+        alex = self.d["players"]["bench"][self.m["Alex"]]
+        self.assertEqual((alex["total"], alex["live_points"]), (30, 30))
+        self.assertEqual(alex["worst_gw"], {"gw": 5, "points": 30})
+        self.assertEqual(alex["by_gw"]["5"], 30)
+        self.assertEqual(self.pm("Alex")["bench_points"], 30)
+        self.assertEqual(self.pm("Dan")["bench_points"], 8)
 
     def test_live_round_folds_into_scorer_table_starts_and_points(self):
         # Alex's primary scorer (element 1) started every gameweek including
@@ -204,13 +211,16 @@ class BuildTest(unittest.TestCase):
     def test_biggest_bench_misses(self):
         missed = self.d["players"]["missed"]
         # 14 pts for Bo in GW2 is the biggest; Dan's four 2-pt benchings follow.
+        # The live GW5 counts too: 30 pts on Alex's bench tops the list
+        # (the frontend labels it "live"). Bo's 14 in GW2 follows, then
+        # Dan's four 2-pt benchings.
         self.assertEqual((missed[0]["points"], missed[0]["gw"], str(missed[0]["entry_id"])),
+                         (30, 5, self.m["Alex"]))
+        self.assertEqual((missed[1]["points"], missed[1]["gw"], str(missed[1]["entry_id"])),
                          (14, 2, self.m["Bo"]))
-        self.assertEqual([r["points"] for r in missed], [14, 2, 2, 2, 2])
-        # The 30 points on Alex's bench in GW5 are ignored: that round is not finished.
-        self.assertTrue(all(r["gw"] <= 4 for r in missed))
+        self.assertEqual([r["points"] for r in missed], [30, 14, 2, 2, 2, 2])
         # Alex's subbed-in bench player (9 pts, GW2) started, so he is not a "miss".
-        self.assertEqual([r for r in missed if r["entry_id"] == 101], [])
+        self.assertEqual([r for r in missed if r["entry_id"] == 101 and r["gw"] == 2], [])
         # Bench totals and the ranked list agree.
         self.assertEqual(self.d["players"]["bench"][self.m["Bo"]]["total"], 14)
 
