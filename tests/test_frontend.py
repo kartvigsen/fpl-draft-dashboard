@@ -384,9 +384,14 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn('h("li", {}, "★ stronger side")', HTML)
         self.assertIn('"▲ top score · ▼ lowest score"', HTML)
 
-    def test_overview_charts_share_one_legend_and_tiles_are_compact_on_phones(self):
-        self.assertIn('pg.append(section("Trends"), legend(M));', HTML)
-        self.assertNotIn('card("Total points", null, legend(M)', HTML)
+    def test_line_charts_draw_team_names_inside_and_tiles_are_compact_on_phones(self):
+        # Names sit in a strip inside each chart, above the lines; no separate legend.
+        self.assertIn("const rowsTop = cfg.names ? nameRows(cfg.series, W - m.l - m.r) : [];", HTML)
+        self.assertEqual(HTML.count("names: true"), 3)  # both Overview charts + Points per round
+        self.assertNotIn("legend(M)", HTML)
+        self.assertNotIn("function legend(", HTML)
+        # Names are text-coloured with a coloured key beside them, never coloured text.
+        self.assertIn('fill: "var(--ink-2)", "font-size": NAME_PX }, nameOf(s.m)', HTML)
         self.assertIn(".tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }", HTML)
 
     def test_all_players_shows_the_top_20_first(self):

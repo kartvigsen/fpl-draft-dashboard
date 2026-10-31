@@ -434,10 +434,9 @@ function textWidth(t, px) {
   measureCtx.font = `${px}px system-ui, -apple-system, "Segoe UI", sans-serif`;
   return measureCtx.measureText(t).width;
 }
-// Team names inside the chart: "top" = a strip above the plot, "right"/"left" = a
-// label beside each line's last/first point, spread apart (with a leader line back
-// to the point) where lines end/start close together.
-const NAME_PX = 11.5, NAME_ROW = 18, NAME_GAP = 15;
+// Team names drawn inside the chart, in a strip above the lines (instead of a
+// separate legend above the card), wrapping onto more rows as width requires.
+const NAME_PX = 11.5, NAME_ROW = 18;
 function nameRows(series, width) {
   const rows = [[]]; let x = 0;
   for (const s of series) {
@@ -451,9 +450,8 @@ function lineChart(host, cfg) {
   const render = () => {
     host.textContent = "";
     const W = Math.max(280, host.clientWidth);
-    const names = cfg.names || null;
     const m = { l: 38, r: 14, t: 14, b: 28 };
-    const rowsTop = names === "top" ? nameRows(cfg.series, W - m.l - m.r) : [];
+    const rowsTop = cfg.names ? nameRows(cfg.series, W - m.l - m.r) : [];
     if (rowsTop.length) m.t += rowsTop.length * NAME_ROW + 4;
     const H = (cfg.height || 270) + (rowsTop.length ? rowsTop.length * NAME_ROW + 4 : 0);
     const iw = W - m.l - m.r, ih = H - m.t - m.b;
@@ -488,23 +486,6 @@ function lineChart(host, cfg) {
         svg.append(sv("line", { x1: m.l + x, x2: m.l + x + 12, y1: y, y2: y, stroke: col(s.m), "stroke-width": 3, "stroke-linecap": "round" }));
         svg.append(sv("text", { x: m.l + x + 18, y: y + 4, fill: "var(--ink-2)", "font-size": NAME_PX }, nameOf(s.m)));
       }));
-    }
-    if (names === "right" || names === "left") {
-      const atEnd = names === "right";
-      const labs = cfg.series.map(s => { const i = atEnd ? s.values.length - 1 : 0; return { s, i, dotY: Y(s.values[i]) }; })
-        .sort((a, b) => a.dotY - b.dotY);
-      // spread labels to at least NAME_GAP apart, kept inside the plot
-      labs.forEach((l, k) => { l.y = k ? Math.max(l.dotY, labs[k - 1].y + NAME_GAP) : Math.max(l.dotY, m.t + 6); });
-      const over = labs.length ? labs[labs.length - 1].y - (m.t + ih - 4) : 0;
-      if (over > 0) labs.forEach(l => { l.y -= over; });
-      for (let k = labs.length - 2; k >= 0; k--) labs[k].y = Math.min(labs[k].y, labs[k + 1].y - NAME_GAP);
-      for (const l of labs) {
-        const dx = X(l.i), tx = atEnd ? dx - 12 : dx + 12;
-        if (Math.abs(l.y - l.dotY) > 3) svg.append(sv("line", { x1: dx, y1: l.dotY, x2: atEnd ? dx - 9 : dx + 9, y2: l.y, stroke: col(l.s.m), "stroke-width": 1 }));
-        svg.append(sv("text", { x: tx, y: l.y + 4, "text-anchor": atEnd ? "end" : "start", fill: "var(--ink)", "font-size": NAME_PX, "font-weight": 600,
-          stroke: "var(--surface)", "stroke-width": 4, "paint-order": "stroke", "stroke-linejoin": "round" }, nameOf(l.s.m)));
-        if (!atEnd) svg.append(sv("circle", { cx: dx, cy: l.dotY, r: 4, fill: col(l.s.m), stroke: "var(--surface)", "stroke-width": 2 }));
-      }
     }
     // selective labels for the extremes
     for (const lab of cfg.labels || []) {
@@ -561,9 +542,6 @@ function heatCell(v, maxCell, title) {
   const dark = s >= 3;
   return h("td", {}, h("div", { class: "cell", title,
     style: s < 0 ? "color:var(--muted)" : `background:var(--h${Math.max(0, s)});color:${dark ? "var(--h-ink-dark)" : "var(--h-ink-light)"}` }, v || "·"));
-}
-function legend(list) {
-  return h("ul", { class: "legend" }, list.map(m => h("li", {}, h("span", { class: "key", style: `background:${col(m)}` }), nameOf(m))));
 }
 function tableView(headers, rows) {
   return h("details", {}, h("summary", {}, "View as table"),
@@ -752,9 +730,9 @@ else {
   const roundRowLabel = (g, i) => (D.live_round && i === chartGws.length - 1 ? `GW${g} live` : `GW${g}`);
   const host1 = h("div", { class: "chart" });
   pg.append(card("Points per round", null,
-    legend(M), host1,
+    host1,
     tableView(["GW", ...M.map(nameOf)], chartGws.map((g, i) => [roundRowLabel(g, i), ...M.map(m => valuesByEntry[m.entry_id][i])]))));
-  lineChart(host1, { xs: chartGws, series: chartSeries, label: "Points per round for each manager",
+  lineChart(host1, { xs: chartGws, series: chartSeries, label: "Points per round for each manager", names: true,
     labels: [{ ...hiI }, { ...loI, below: true }] });
 
   const allRoundVals = finishedRounds.flatMap(r => M.map(m => r.scores[m.entry_id]).filter(v => v != null));
@@ -779,7 +757,7 @@ else {
 
   /* trends */
   pg = panels.overview;
-  pg.append(section("Trends"), legend(M));
+  pg.append(section("Trends"));
   const cumHost = h("div", { class: "chart" }), rankHost = h("div", { class: "chart" });
   // The live round's total/rank already fold in its provisional score (same
   // figures as the Standings table), so these two charts can show it as one
@@ -795,8 +773,8 @@ else {
       tableView(["GW", ...M.map(nameOf)], trendGws.map((g, i) => [trendRowLabel(g, i), ...M.map(m => cumByEntry[m.entry_id][i])]))),
     card("Position in the league", null, rankHost,
       tableView(["GW", ...M.map(nameOf)], trendGws.map((g, i) => [trendRowLabel(g, i), ...M.map(m => "#" + rankByEntry[m.entry_id][i])])))));
-  lineChart(cumHost, { xs: trendGws, series: M.map(m => ({ m, values: cumByEntry[m.entry_id] })), label: "Running total points", height: 260 });
-  lineChart(rankHost, { xs: trendGws, series: M.map(m => ({ m, values: rankByEntry[m.entry_id] })), rank: M.length, label: "League position after each round", height: 260 });
+  lineChart(cumHost, { xs: trendGws, series: M.map(m => ({ m, values: cumByEntry[m.entry_id] })), label: "Running total points", height: 260, names: true });
+  lineChart(rankHost, { xs: trendGws, series: M.map(m => ({ m, values: rankByEntry[m.entry_id] })), rank: M.length, label: "League position after each round", height: 260, names: true });
 
   /* rounds won + records */
   pg = panels.rounds;
