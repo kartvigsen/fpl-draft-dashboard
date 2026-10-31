@@ -300,6 +300,12 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn("@media (prefers-reduced-motion: reduce) { .mx-tick { animation: none; } }", HTML)
         self.assertIn('["Live · ", h("span", { class: "mx-status live" }, clockEl(m))]', HTML)
 
+    def test_live_match_rows_are_tinted_green_including_teams(self):
+        self.assertIn(".mx-row.live { background: color-mix(in oklab, var(--good) 12%, transparent); }", HTML)
+        self.assertIn(".mx-row.live .mx-team, .mx-row.live .mx-score { color: var(--good); }", HTML)
+        self.assertIn(".mx-status.live { color: var(--good); }", HTML)
+        self.assertNotIn(".mx-row.live .mx-score { color: var(--bad); }", HTML)
+
     def test_match_rows_never_cut_off_team_names(self):
         self.assertIn(".mx-team { font-size: 14px; font-weight: 600; line-height: 1.2; }", HTML)
         self.assertIn("@media (max-width: 380px) { .mx-team { font-size: 12.5px; }", HTML)
