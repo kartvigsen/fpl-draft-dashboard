@@ -252,9 +252,10 @@ details .tbl-wrap { margin-top: 8px; }
 .mx-row:hover { background: var(--wash); }
 .mx-status { grid-row: 1; font-size: 12px; font-weight: 700; color: var(--ink-2); font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: 4px; }
 .mx-status.live { color: var(--bad); }
-.mx-pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--bad); animation: mx-pulse 1.4s ease-in-out infinite; }
-@keyframes mx-pulse { 50% { opacity: .25; } }
-@media (prefers-reduced-motion: reduce) { .mx-pulse { animation: none; } }
+.mx-status.live { gap: 0; }
+.mx-tick { animation: mx-blink 1s step-end infinite; }
+@keyframes mx-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .mx-tick { animation: none; } }
 .mx-team { font-size: 14px; font-weight: 600; line-height: 1.2; }
 .mx-team.h { text-align: right; }
 @media (max-width: 380px) { .mx-team { font-size: 12.5px; } .mx-row { column-gap: 6px; } }
@@ -1260,8 +1261,34 @@ pg.append(section("Live round"));
     if (MX.length) {
       const dayOf = iso => new Date(iso).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" });
       const timeOf = iso => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+      // The clock is a snapshot from the last update, so it counts on in the
+      // browser -- capped at 45 until the next update confirms the second
+      // half (never "52'" at half-time) and at 90 after that.
+      const builtAt = Date.parse(meta.generated_at);
+      function liveMinute(m, now = Date.now()) {
+        if (m.minutes > 0) {
+          const est = m.minutes + Math.max(0, Math.floor((now - builtAt) / 60000));
+          const cap = m.minutes <= 45 ? 45 : 90;
+          return est > cap ? `${cap}+` : String(est);
+        }
+        // No clock in the feed: estimate from kick-off, allowing ~16 minutes of half-time.
+        const el = Math.floor((now - Date.parse(m.kickoff)) / 60000);
+        if (!(el >= 0)) return "1";
+        if (el < 45) return String(el + 1);
+        if (el <= 47) return "45+";
+        if (el < 62) return "HT";
+        return el - 16 >= 90 ? "90+" : String(el - 16);
+      }
+      const liveClocks = [];
+      const clockEl = m => {
+        const min = h("span", { class: "mx-min" }), tick = h("span", { class: "mx-tick" }, "'");
+        const paint = () => { const t = liveMinute(m); min.textContent = t; tick.hidden = t === "HT"; };
+        paint(); liveClocks.push(paint);
+        return [min, tick];
+      };
+      setInterval(() => liveClocks.forEach(p => p()), 20000);
       const statusEl = m => m.status === "ft" ? h("span", { class: "mx-status" }, "FT")
-        : m.status === "live" ? h("span", { class: "mx-status live" }, h("span", { class: "mx-pulse" }), "LIVE")
+        : m.status === "live" ? h("span", { class: "mx-status live", title: "Live" }, clockEl(m))
         : h("span", { class: "mx-status" }, m.kickoff ? timeOf(m.kickoff) : "TBC");
       // A side's goals include the other side's own goals, marked (OG).
       const scorers = (own, other) => [
@@ -1287,7 +1314,8 @@ pg.append(section("Live round"));
       function openMatch(m) {
         modalCard.className = "modal-card wide";
         modalCard.textContent = "";
-        const when = m.status === "ft" ? "Full time" : m.status === "live" ? "Live" : `Kick-off ${dayOf(m.kickoff)}, ${timeOf(m.kickoff)}`;
+        const when = m.status === "ft" ? "Full time" : m.status === "live" ? ["Live · ", h("span", { class: "mx-status live" }, clockEl(m))]
+          : `Kick-off ${dayOf(m.kickoff)}, ${timeOf(m.kickoff)}`;
         modalCard.append(
           h("button", { type: "button", class: "ghost", style: "float:right", onclick: closeModal }, "Close"),
           h("p", { class: "sub" }, when),

@@ -279,7 +279,7 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertLess(lineups, matches)
         self.assertLess(matches, every)
         self.assertIn("const MX = CR.matches || [];", HTML)
-        self.assertIn('m.status === "live" ? h("span", { class: "mx-status live" }', HTML)
+        self.assertIn('m.status === "live" ? h("span", { class: "mx-status live", title: "Live" }, clockEl(m))', HTML)
         self.assertIn('${p.name} (OG)', HTML)  # own goals count for the other side
 
     def test_tapping_a_match_opens_a_player_overview(self):
@@ -290,6 +290,15 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn('title: `Owned by ${nameOf(byId[p.owner_entry_id])}`', HTML)
         # The player pop-up goes back to its normal width after a match pop-up.
         self.assertIn('function openPlayerModal(p) {\n      modalCard.className = "modal-card";', HTML)
+
+    def test_live_matches_show_a_counting_minute_with_a_blinking_tick(self):
+        self.assertIn("function liveMinute(m, now = Date.now())", HTML)
+        # Snapshot minute counts on in the browser, capped per half.
+        self.assertIn("const cap = m.minutes <= 45 ? 45 : 90;", HTML)
+        self.assertIn("setInterval(() => liveClocks.forEach(p => p()), 20000);", HTML)
+        self.assertIn(".mx-tick { animation: mx-blink 1s step-end infinite; }", HTML)
+        self.assertIn("@media (prefers-reduced-motion: reduce) { .mx-tick { animation: none; } }", HTML)
+        self.assertIn('["Live · ", h("span", { class: "mx-status live" }, clockEl(m))]', HTML)
 
     def test_match_rows_never_cut_off_team_names(self):
         self.assertIn(".mx-team { font-size: 14px; font-weight: 600; line-height: 1.2; }", HTML)

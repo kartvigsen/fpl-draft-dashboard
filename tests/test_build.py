@@ -1065,6 +1065,25 @@ class RoundMatchesTest(unittest.TestCase):
         home = [p["name"] for p in self.matches()[0]["home"]["players"]]
         self.assertEqual(home, ["Striker", "Keeper"])
 
+    def test_live_minute_comes_from_the_classic_feed_by_match_code(self):
+        live = self.live()
+        live["fixtures"][2]["code"] = 9003          # the live match
+        live["fixtures"][0]["code"] = 9002          # upcoming: no minute even if the feed has one
+        clock = [{"code": 9003, "minutes": 63}, {"code": 9002, "minutes": 5}]
+        m = {x["id"]: x for x in build_stats._round_matches(live, self.BOOT, self.PLAYERS, {}, clock)}
+        self.assertEqual(m[3]["minutes"], 63)
+        self.assertIsNone(m[2]["minutes"])
+        self.assertIsNone(m[1]["minutes"])        # finished
+
+    def test_live_minute_falls_back_to_kickoff_and_team_names(self):
+        clock = [{"code": None, "kickoff_time": "2026-11-02T20:00:00Z", "team_h": 7, "team_a": 8, "minutes": 71}]
+        classic_teams = [{"id": 7, "short_name": "BBB"}, {"id": 8, "short_name": "CCC"}]
+        m = build_stats._round_matches(self.live(), self.BOOT, self.PLAYERS, {}, clock, classic_teams)
+        self.assertEqual([x["minutes"] for x in m], [None, None, 71])
+
+    def test_no_clock_feed_means_no_minute(self):
+        self.assertEqual([x["minutes"] for x in self.matches()], [None, None, None])
+
     def test_build_includes_matches_in_the_current_round(self):
         tmp = Path(tempfile.mkdtemp())
         try:
