@@ -278,6 +278,25 @@ details.info[open] .sub { margin-top: 6px; }
 @media (max-width: 380px) { .modal-card.wide { padding: 14px 12px; } .mx-tbl { font-size: 12px; } .mx-tbl th, .mx-tbl td { padding: 6px 3px; } }
 .mx-tbl td.num, .mx-tbl th:not(.l) { text-align: center; width: 1%; white-space: nowrap; }
 .mx-who { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.club-btn { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 0; white-space: nowrap; }
+.club-btn:hover, .club-btn:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
+.club-btn:focus-visible { outline: 2px solid var(--accent, currentColor); outline-offset: 2px; border-radius: 4px; }
+.club-btn .chev { margin-left: 6px; color: var(--muted); font-size: 16px; line-height: 1; }
+.sq-fx { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin: 8px 0 12px; }
+.sq-cell { border-radius: 8px; padding: 5px 2px; text-align: center; font-size: 12px; font-weight: 700; line-height: 1.25; white-space: nowrap; overflow: hidden; }
+.sq-cell .gw { display: block; font-size: 10.5px; font-weight: 500; opacity: .8; }
+.sq-seg { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 8px; }
+.sq-seg .seg { all: unset; cursor: pointer; font-size: 12.5px; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--ink-2); }
+.sq-seg .seg[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.sq-seg .seg:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.sq-name .sq-nm { display: block; font-weight: 600; white-space: nowrap; }
+.sq-name .sq-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 5px; margin-top: 2px; white-space: nowrap; }
+.sq-tbl th, .sq-tbl td { padding: 6px 3px; }
+@media (max-width: 480px) { .modal-card.wide { padding: 14px 12px; } .modal-backdrop { padding: 10px; } .sq-tbl { font-size: 12px; } .sq-tbl th:not(:first-child), .sq-tbl td:not(:first-child) { padding: 6px 2px; } }
+.sq-tbl td.num { font-variant-numeric: tabular-nums; }
+.sq-tbl th:first-child, .sq-tbl td:first-child { position: sticky; left: 0; background: var(--surface); z-index: 1; padding-right: 6px; }
+.tag-free.sm { padding: 0 6px; font-size: 10.5px; line-height: 16px; }
+tr.sq-zero td { color: var(--muted); }
 .mx-nm { font-weight: 600; }
 .mx-pos { font-size: 10.5px; color: var(--muted); }
 .mx-card { display: inline-block; width: 8px; height: 11px; border-radius: 2px; }
@@ -617,6 +636,14 @@ if (meta.demo) app.append(h("div", { class: "banner" }, h("strong", {}, "Demo da
   "These numbers are invented so you can preview the dashboard. Run ", h("code", {}, "python3 update.py"), " to load your league."));
 if (!D.checks.all_ok) app.append(h("div", { class: "banner" }, h("strong", {}, "Heads up: "),
   "some calculated scores do not match the site's own standings. See “Data checks” at the bottom."));
+
+/* modal (shared by every tab; lives outside the panels so it shows from any of them) */
+const modalBackdrop = h("div", { class: "modal-backdrop", hidden: true,
+  onclick: ev => { if (ev.target === modalBackdrop) closeModal(); } });
+const modalCard = h("div", { class: "modal-card", role: "dialog", "aria-modal": "true" });
+modalBackdrop.append(modalCard);
+function closeModal() { modalBackdrop.hidden = true; }
+document.addEventListener("keydown", ev => { if (ev.key === "Escape" && !modalBackdrop.hidden) closeModal(); });
 
 /* tabs */
 const TABS = [["overview", "Overview"], ["liveround", "Live round"], ["rounds", "Rounds"], ["players", "Team info"], ["transactions", "Transactions"], ["fixtures", "Fixtures"], ["allplayers", "All players"]];
@@ -1022,12 +1049,6 @@ pg = panels.liveround;
       return parts.join(" · ") || "–";
     };
 
-    const modalBackdrop = h("div", { class: "modal-backdrop", hidden: true,
-      onclick: ev => { if (ev.target === modalBackdrop) closeModal(); } });
-    const modalCard = h("div", { class: "modal-card", role: "dialog", "aria-modal": "true" });
-    modalBackdrop.append(modalCard);
-    function closeModal() { modalBackdrop.hidden = true; }
-    document.addEventListener("keydown", ev => { if (ev.key === "Escape" && !modalBackdrop.hidden) closeModal(); });
     const statRow = (label, value) => [h("dt", {}, label), h("dd", {}, value)];
     function openPlayerModal(p) {
       modalCard.className = "modal-card";
@@ -1079,7 +1100,7 @@ pg = panels.liveround;
     }
     paintPitch();
     pg.append(card("Team lineups", null,
-      h("div", { class: "teamtabs", role: "tablist" }, tabs), pitchHost), modalBackdrop);
+      h("div", { class: "teamtabs", role: "tablist" }, tabs), pitchHost));
 
     /* matches (livescore) */
     const MX = CR.matches || [];
@@ -1400,9 +1421,68 @@ pg = panels.fixtures;
       return FT;
     }
 
+    /* club squad (tap a team) */
+    const STATUS_TAG = { d: "Doubtful", i: "Injured", s: "Suspended", u: "Unavailable", n: "Unavailable" };
+    const SQUAD_COLS = [
+      { key: "name", label: "Player", num: false, get: p => p.name },
+      { key: "pts", label: "Pts", num: true, get: p => p.total_points, title: "Season points" },
+      { key: "min", label: "Min", num: true, get: p => p.minutes, title: "Minutes played" },
+      { key: "g", label: "G", num: true, get: p => p.goals_scored, title: "Goals" },
+      { key: "a", label: "A", num: true, get: p => p.assists, title: "Assists" },
+      { key: "cs", label: "CS", num: true, get: p => p.clean_sheets, title: "Clean sheets" },
+      { key: "dc", label: "DC", num: true, get: p => p.defensive_contribution, title: "Defensive contributions (DEFCON)" },
+      { key: "b", label: "B", num: true, get: p => p.bonus, title: "Bonus points" },
+      { key: "form", label: "Form", num: true, get: p => p.form, title: "FPL form: average points per game, last 30 days" },
+    ];
+    function openClub(t) {
+      const squad = (D.all_players || []).filter(p => p.club === t.short_name);
+      const sorter = makeSortHeader(SQUAD_COLS, "pts", -1);
+      let pos = "";
+      const thead = h("thead", {}), body = h("tbody", {});
+      const posBtns = ["", "GKP", "DEF", "MID", "FWD"].map(v => h("button", { type: "button", class: "seg", "aria-pressed": String(v === pos),
+        onclick: () => { pos = v; posBtns.forEach((b, i) => b.setAttribute("aria-pressed", String(["", "GKP", "DEF", "MID", "FWD"][i] === pos))); paint(); } }, v || "All"));
+      const blank = v => (v ? fmt(v) : "");
+      const playerCell = p => h("td", { class: "l sq-name" },
+        h("span", { class: "sq-nm" }, p.name),
+        h("span", { class: "sq-meta" }, h("span", { class: "pos", style: "margin-left:0" }, p.pos),
+          p.owner_entry_id != null ? h("span", { title: `Owned by ${nameOf(byId[p.owner_entry_id])}` }, dot(byId[p.owner_entry_id]))
+            : h("span", { class: "tag-free sm" }, "FA"),
+          STATUS_TAG[p.status] ? h("span", { class: `sg-flag ${p.status === "d" ? "warn" : "bad"}`, style: "margin-left:0", title: p.news || STATUS_TAG[p.status] },
+            p.status === "d" && p.chance != null ? `${p.chance}%` : STATUS_TAG[p.status]) : null));
+      function paint() {
+        const list = sorter.sorted(squad.filter(p => !pos || p.pos === pos));
+        body.textContent = "";
+        body.append(...list.map(p => h("tr", { class: p.minutes ? "" : "sq-zero" }, playerCell(p),
+          h("td", { class: "num win" }, fmt(p.total_points)), h("td", { class: "num" }, fmt(p.minutes)),
+          h("td", { class: "num" }, blank(p.goals_scored)), h("td", { class: "num" }, blank(p.assists)),
+          h("td", { class: "num" }, blank(p.clean_sheets)), h("td", { class: "num" }, blank(p.defensive_contribution)),
+          h("td", { class: "num" }, blank(p.bonus)), h("td", { class: "num" }, p.form ? p.form.toFixed(1) : ""))));
+        if (!list.length) body.append(h("tr", {}, h("td", { class: "l", colspan: String(SQUAD_COLS.length) }, emptyMsg("No players."))));
+        thead.textContent = "";
+        const tr = sorter.row(paint);
+        [...tr.children].forEach((th, i) => { if (SQUAD_COLS[i].title) th.title = SQUAD_COLS[i].title; });
+        thead.append(tr);
+      }
+      paint();
+      modalCard.className = "modal-card wide";
+      modalCard.textContent = "";
+      modalCard.append(
+        h("button", { type: "button", class: "ghost", style: "float:right", onclick: closeModal }, "Close"),
+        h("h3", { class: "mx-title" }, t.name),
+        h("div", { class: "sq-fx" }, t.fixtures.map(f => h("span", { class: "sq-cell",
+          style: `background:${f.difficulty ? fdrColor(f.difficulty) : "var(--wash)"};color:${f.difficulty ? fdrInk(f.difficulty) : "var(--ink-2)"}`,
+          title: `GW${f.gw}: ${f.home ? "Home" : "Away"} vs ${f.opponent}${f.difficulty ? `, difficulty ${f.difficulty}/5` : ""}` },
+          h("span", { class: "gw" }, `GW${f.gw}`), `${f.opponent} (${f.home ? "H" : "A"})`))),
+        h("div", { class: "sq-seg", role: "group", "aria-label": "Filter by position" }, posBtns),
+        h("div", { class: "tbl-wrap" }, h("table", { class: "mx-tbl sq-tbl" }, thead, body)),
+        h("p", { class: "sub mx-legend" }, "Season totals. A dot shows the league owner · FA free agent · G goals · A assists · CS clean sheets · DC defensive contributions · B bonus."));
+      modalBackdrop.hidden = false;
+    }
+
     function row(t) {
       const avg = avgFdr(t);
-      const tr = h("tr", {}, h("td", { class: "l" }, t.name, h("span", { class: "pos" }, t.short_name)),
+      const tr = h("tr", {}, h("td", { class: "l" }, h("button", { type: "button", class: "club-btn", onclick: () => openClub(t),
+          "aria-label": `${t.name}: show squad` }, t.name, h("span", { class: "pos" }, t.short_name), h("span", { class: "chev", "aria-hidden": "true" }, "›"))),
         h("td", { class: "num" }, avg == null ? "–" : avg.toFixed(1)));
       for (let i = 0; i < maxCols; i++) if (included[i]) tr.append(cell(t.fixtures[i]));
       return tr;
@@ -1455,7 +1535,7 @@ dl.append(h("div", { class: "tbl-wrap" }, h("table", {}, h("thead", {}, h("tr", 
 if (chk.lineup_vs_official_mismatches.length) dl.append(h("p", { class: "sub" }, `${chk.lineup_vs_official_mismatches.length} lineup(s) where calculated and official round points differ.`));
 if (chk.missing_lineups.length) dl.append(h("p", { class: "sub" }, `${chk.missing_lineups.length} lineup file(s) missing.`));
 foot.append(dl);
-app.append(foot);
+app.append(foot, modalBackdrop);
 document.title = meta.league_name + " · FPL Draft";
 </script>
 <script>

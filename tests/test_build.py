@@ -745,7 +745,11 @@ def write_all_players_fixture(root):
     _dump(root, "bootstrap.json", {
         "elements": [
             {"id": 501, "web_name": "Ann", "element_type": 1, "team": 1,
-             "total_points": 80, "points_per_game": "8.0", "starts": 10},
+             "total_points": 80, "points_per_game": "8.0", "starts": 10,
+             "minutes": 900, "goals_scored": 0, "assists": 1, "clean_sheets": 4,
+             "defensive_contribution": 12, "bonus": 7, "saves": 30, "form": "6.5",
+             "status": "d", "news": "Knock - 75% chance of playing",
+             "chance_of_playing_next_round": 75},
             {"id": 502, "web_name": "Ben", "element_type": 2, "team": 2,
              "total_points": 30, "points_per_game": None, "starts": 5},
             {"id": 503, "web_name": "Cid", "element_type": 3, "team": 1,
@@ -997,6 +1001,19 @@ class AllPlayersTest(unittest.TestCase):
         self.assertEqual(self.by_id[504]["draft_pick"], 5)
         self.assertEqual(self.by_id[501]["draft_pick"], 1)
         self.assertEqual(self.by_id[502]["draft_pick"], 2)
+
+    def test_season_stats_for_the_club_squad_view(self):
+        ann = self.by_id[501]
+        self.assertEqual((ann["minutes"], ann["starts"], ann["goals_scored"], ann["assists"],
+                          ann["clean_sheets"], ann["defensive_contribution"], ann["bonus"], ann["saves"]),
+                         (900, 10, 0, 1, 4, 12, 7, 30))
+        self.assertEqual(ann["form"], 6.5)
+        self.assertEqual((ann["status"], ann["chance"]), ("d", 75))
+        self.assertIn("Knock", ann["news"])
+        # Missing fields fall back to zero / available.
+        cid = self.by_id[503]
+        self.assertEqual((cid["minutes"], cid["defensive_contribution"], cid["form"], cid["status"], cid["chance"]),
+                         (0, 0, 0.0, "a", None))
 
     def test_undrafted_player_has_no_draft_pick(self):
         self.assertIsNone(self.by_id[503]["draft_pick"])
