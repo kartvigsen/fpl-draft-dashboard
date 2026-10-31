@@ -33,10 +33,10 @@ class FrontendMarkupTest(unittest.TestCase):
 
     def test_standings_explains_the_live_score_when_a_round_is_in_progress(self):
         self.assertIn("if (D.live_round) pg.append(", HTML)
-        self.assertIn("isn't final yet", HTML)
+        self.assertIn("`Pts include live GW${D.live_round.gw}.`", HTML)
 
     def test_header_subtitle_reflects_live_not_excluded(self):
-        self.assertIn("in progress (live, not yet final)", HTML)
+        self.assertIn("`GW${meta.current_gw} live`", HTML)
         self.assertNotIn("in progress (not counted)", HTML)
 
     def test_leader_tile_flags_a_live_total(self):
@@ -134,7 +134,6 @@ class HomeScreenInstallTest(unittest.TestCase):
 
     def test_biggest_single_player_rounds_labels_the_live_round(self):
         self.assertIn("D.live_round && p.gw === D.live_round.gw", HTML)
-        self.assertIn("Includes the live round in progress", HTML)
 
     def test_scorer_table_is_a_single_table_so_expanded_rows_stay_aligned(self):
         # Splitting the visible/expanded rows into two separate <table>
@@ -151,7 +150,6 @@ class HomeScreenInstallTest(unittest.TestCase):
     def test_scorer_table_shows_live_points_and_still_on_squad(self):
         self.assertIn("p.live_points != null", HTML)
         self.assertIn('p.on_squad ? h("span", { class: "tag-squad"', HTML)
-        self.assertIn("still on the squad", HTML)
         # The name itself stays plain text; only the pill is coloured.
         self.assertNotIn('class: p.on_squad ? "up" : ""', HTML)
 
@@ -168,11 +166,11 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn('"1–10"', HTML)
         self.assertIn("byRank.slice(lo - 1, hi)", HTML)
         self.assertIn("[...AP].sort((a, b) => b.total_points - a.total_points)", HTML)
-        section_order = HTML.index('pg.append(section("All players"));')
+        section_order = HTML.index('pg = panels.allplayers;')
         pivot_idx = HTML.index("Squad by overall rank bracket")
         table_idx = HTML.index('pg.append(card("Every Premier League player"')
         self.assertTrue(section_order < pivot_idx < table_idx)
-        self.assertIn("not players who scored 1 to 10 points", HTML)
+        self.assertIn("Each squad by season-points rank", HTML)
         players_section = HTML[HTML.index('pg = panels.players;'):HTML.index('/* all players */')]
         self.assertNotIn("Squad by overall rank bracket", players_section)
 
@@ -200,7 +198,7 @@ class HomeScreenInstallTest(unittest.TestCase):
     def test_fixtures_tab_has_round_toggles_and_easiest_hardest_filter(self):
         self.assertIn('"5 easiest schedules"', HTML)
         self.assertIn('"5 hardest schedules"', HTML)
-        self.assertIn("Rounds included in the ranking", HTML)
+        self.assertIn("Rounds in the ranking", HTML)
         self.assertIn("included.filter(Boolean).length <= 1", HTML)
 
     def test_live_round_tab_shows_a_pitch_with_captain_and_vice_captain_badges(self):
@@ -322,7 +320,6 @@ class HomeScreenInstallTest(unittest.TestCase):
 
     def test_live_round_tab_table_is_also_filterable_by_owner(self):
         self.assertIn('h("div", { class: "filters" }, ownerSel, clubSel, posSel)', HTML)
-        self.assertIn('Filter by owner, club or position', HTML)
 
     def test_live_round_tab_table_shows_top_20_with_a_show_all_toggle(self):
         self.assertIn("const LIM = 20;", HTML)
@@ -374,6 +371,30 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn("overflow-x: auto; overflow-y: hidden;", HTML)
         self.assertIn("box-shadow: inset 0 -1px 0 var(--grid);", HTML)
         self.assertNotIn("border-bottom: 2px solid transparent; margin-bottom: -1px;", HTML)
+
+    def test_slim_layout_drops_headings_that_repeat_the_tab_name(self):
+        for gone in ('section("Round by round")', 'section("Live round")', 'section("All players")', 'section("Fixtures")',
+                     "updates a few times a day, not in real time"):
+            self.assertNotIn(gone, HTML)
+
+    def test_slim_layout_keeps_explanations_behind_a_tap(self):
+        self.assertIn('h("details", { class: "info" }, h("summary", {}, `Like-for-like swaps for GW${TS.next_gw}`', HTML)
+        self.assertIn('h("details", {}, h("summary", {}, "How it works")', HTML)
+        self.assertIn('"Open FPL Draft app ↗"', HTML)
+        self.assertIn('h("li", {}, "★ stronger side")', HTML)
+        self.assertIn('"▲ top score · ▼ lowest score"', HTML)
+
+    def test_overview_charts_share_one_legend_and_tiles_are_compact_on_phones(self):
+        self.assertIn('pg.append(section("Trends"), legend(M));', HTML)
+        self.assertNotIn('card("Total points", null, legend(M)', HTML)
+        self.assertIn(".tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }", HTML)
+
+    def test_all_players_shows_the_top_20_first(self):
+        panel = HTML[HTML.index("pg = panels.allplayers;"):HTML.index("/* fixtures */") if "/* fixtures */" in HTML else None]
+        self.assertIn("const LIM = 20;", panel)
+        self.assertIn("(showAll ? sorted : sorted.slice(0, LIM)).map(row)", panel)
+        self.assertIn("more.textContent = showAll ? \"Show fewer\" : `Show all ${fmt(sorted.length)}`;", panel)
+        self.assertIn('onchange: () => { showAll = false; render(); }', panel)  # filters collapse back to 20
 
     def test_tab_order_matches_the_requested_layout(self):
         tabs_line = re.search(r'const TABS = \[.*?\];', HTML).group(0)
