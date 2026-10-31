@@ -356,14 +356,16 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn("D.live_round.scores[s.m.entry_id] ?? 0", HTML)
         self.assertIn("xs: chartGws, series: chartSeries", HTML)
 
-    def test_weekly_awards_and_head_to_head_tabs_are_gone(self):
-        for gone in ('"awards"', '"h2h"', "Weekly awards", "Head-to-head", "panels.awards", "panels.h2h", ".award {"):
+    def test_removed_tabs_are_gone(self):
+        for gone in ('"awards"', '"h2h"', "Weekly awards", "Head-to-head", "panels.awards", "panels.h2h", ".award {",
+                     '"justice"', '"streaks"', "Table of justice", "Streaks & badges", "panels.justice", "panels.streaks",
+                     "D.justice", "D.streaks", "D.milestones"):
             self.assertNotIn(gone, HTML)
 
     def test_tab_order_matches_the_requested_layout(self):
         tabs_line = re.search(r'const TABS = \[.*?\];', HTML).group(0)
         order = [k for k in re.findall(r'\["(\w+)",', tabs_line)]
-        self.assertEqual(order, ["overview", "liveround", "rounds", "players", "transactions", "fixtures", "allplayers", "justice", "streaks"])
+        self.assertEqual(order, ["overview", "liveround", "rounds", "players", "transactions", "fixtures", "allplayers"])
 
     def test_players_tab_is_labeled_team_info(self):
         self.assertIn('["players", "Team info"]', HTML)
@@ -439,42 +441,6 @@ class HomeScreenInstallTest(unittest.TestCase):
     def test_data_checks_explains_an_unsubbed_live_total_instead_of_flagging_it(self):
         self.assertIn('"through_finished_plus_live_unsubbed"', HTML)
         self.assertIn("site's live round isn't subbed yet", HTML)
-
-    def test_table_of_justice_tab_ranks_by_deserved_total_and_labels_the_gap(self):
-        panel = HTML[HTML.index("/* table of justice */"):HTML.index("/* streaks & badges */")]
-        self.assertIn("D.justice.map(", panel)
-        self.assertIn("j.deserved_total", panel)
-        self.assertIn("j.actual_rank", panel)
-        self.assertIn("`Robbed by ${j.luck_delta}`", panel)
-        self.assertIn("`Blessed by ${-j.luck_delta}`", panel)
-        self.assertIn('"Spot on"', panel)
-
-    def test_table_of_justice_handles_no_finished_gameweeks_yet(self):
-        panel = HTML[HTML.index("/* table of justice */"):HTML.index("/* streaks & badges */")]
-        self.assertIn("if (!gws.length) pg.append(emptyMsg(", panel)
-
-    def test_streaks_tab_switches_between_managers_like_team_info(self):
-        panel = HTML[HTML.index("/* streaks & badges */"):HTML.index("/* players */")]
-        self.assertIn('class: "teamtab"', panel)
-        self.assertIn("activeEntryId = m.entry_id; paintStreaks();", panel)
-
-    def test_streaks_tab_shows_current_and_best_for_each_streak_type(self):
-        panel = HTML[HTML.index("/* streaks & badges */"):HTML.index("/* players */")]
-        self.assertIn("s.win[activeEntryId].current", panel)
-        self.assertIn("s.win[activeEntryId].best", panel)
-        self.assertIn("s.top2[activeEntryId].current", panel)
-        self.assertIn("s.cold[activeEntryId].best", panel)
-
-    def test_streaks_tab_badges_account_for_ties(self):
-        # Every badge is awarded to every manager tied for the lead, not
-        # just the first one found.
-        panel = HTML[HTML.index("/* streaks & badges */"):HTML.index("/* players */")]
-        self.assertIn("function leadersBy(fn) {", panel)
-        self.assertIn("M.filter(m => fn(PM[m.entry_id]) === best).map(m => m.entry_id)", panel)
-
-    def test_streaks_tab_handles_no_finished_gameweeks_yet(self):
-        panel = HTML[HTML.index("/* streaks & badges */"):HTML.index("/* players */")]
-        self.assertIn("if (!gws.length) pg.append(emptyMsg(", panel)
 
 if __name__ == "__main__":
     unittest.main()

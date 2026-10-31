@@ -642,108 +642,14 @@ class BestRoundsLiveTest(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
-class TableOfJusticeTest(unittest.TestCase):
-    """Three managers, two finished gameweeks. Season totals are Bravo
-    120 > Alex 95 > Cleo 90, but Cleo's gw1 bench (30) is large enough
-    that total-plus-bench reorders her above Alex, so the table should
-    show both a "robbed" (Cleo) and a "blessed" (Alex) manager."""
-
-    def test_standings_are_reordered_by_total_plus_bench_points(self):
-        tmp = Path(tempfile.mkdtemp())
-        try:
-            mock.write_raw(
-                tmp,
-                gw_scores=[[40, 50, 60], [55, 70, 30]],
-                current_finished=True,
-                bench={(1, 2): 30, (2, 0): 20, (2, 1): 2, (2, 2): 1},
-                people=[("Alex", "A.", "Team Alpha"), ("Bo", "B.", "Team Bravo"), ("Cleo", "C.", "Team Charlie")],
-            )
-            d = build_stats.build(tmp)
-            by_team = {m["team"]: m["entry_id"] for m in d["managers"]}
-            justice_by_id = {j["entry_id"]: j for j in d["justice"]}
-
-            bravo = justice_by_id[by_team["Team Bravo"]]
-            alpha = justice_by_id[by_team["Team Alpha"]]
-            charlie = justice_by_id[by_team["Team Charlie"]]
-
-            self.assertEqual(bravo["deserved_rank"], 1)
-            self.assertEqual(bravo["luck_delta"], 0)
-
-            self.assertEqual(charlie["deserved_total"], 90 + 31)
-            self.assertEqual(charlie["deserved_rank"], 2)
-            self.assertEqual(charlie["actual_rank"], 3)
-            self.assertEqual(charlie["luck_delta"], 1)  # robbed
-
-            self.assertEqual(alpha["deserved_total"], 95 + 20)
-            self.assertEqual(alpha["deserved_rank"], 3)
-            self.assertEqual(alpha["actual_rank"], 2)
-            self.assertEqual(alpha["luck_delta"], -1)  # blessed
-
-            # d["justice"] itself is already sorted by deserved rank
-            self.assertEqual([j["entry_id"] for j in d["justice"]],
-                              [by_team["Team Bravo"], by_team["Team Charlie"], by_team["Team Alpha"]])
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
-
-
-class StreaksAndMilestonesTest(unittest.TestCase):
-    """Three managers, four finished gameweeks, scores picked so each
-    streak type breaks and restarts at least once (proving "current" and
-    "best" are tracked separately), and so the 100/200-point milestones
-    land in different gameweeks for each manager, including a manager
-    (Charlie) who never reaches the 200 threshold at all."""
-
-    def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp())
-        mock.write_raw(
-            self.tmp,
-            gw_scores=[[60, 50, 40], [70, 50, 40], [30, 80, 40], [90, 20, 50]],
-            current_finished=True,
-            people=[("Alex", "A.", "Team Alpha"), ("Bo", "B.", "Team Bravo"), ("Cleo", "C.", "Team Charlie")],
-        )
-        self.d = build_stats.build(self.tmp)
-        self.by_team = {m["team"]: m["entry_id"] for m in self.d["managers"]}
-
-    def tearDown(self):
-        shutil.rmtree(self.tmp, ignore_errors=True)
-
-    def test_win_streak_breaks_and_restarts(self):
-        # Alpha wins gw1+gw2 (streak 2), is last in gw3 (breaks), wins gw4
-        # again (restarts at 1) -- best must stay 2, current must be 1.
-        win = self.d["streaks"]["win"][str(self.by_team["Team Alpha"])]
-        self.assertEqual(win, {"current": 1, "best": 2})
-
-    def test_top2_and_cold_streaks_per_manager(self):
-        s = self.d["streaks"]
-        alpha, bravo, charlie = (str(self.by_team[t]) for t in ("Team Alpha", "Team Bravo", "Team Charlie"))
-        self.assertEqual(s["top2"][alpha], {"current": 1, "best": 2})
-        self.assertEqual(s["cold"][alpha], {"current": 0, "best": 1})
-
-        self.assertEqual(s["win"][bravo], {"current": 0, "best": 1})
-        self.assertEqual(s["top2"][bravo], {"current": 0, "best": 3})
-        self.assertEqual(s["cold"][bravo], {"current": 1, "best": 1})
-
-        self.assertEqual(s["win"][charlie], {"current": 0, "best": 0})
-        self.assertEqual(s["top2"][charlie], {"current": 2, "best": 2})
-        self.assertEqual(s["cold"][charlie], {"current": 0, "best": 2})
-
-    def test_milestones_are_the_gameweek_each_threshold_was_first_crossed(self):
-        alpha, bravo, charlie = (str(self.by_team[t]) for t in ("Team Alpha", "Team Bravo", "Team Charlie"))
-        m = self.d["milestones"]
-        # Alpha: 60, 130, 160, 250 -- crosses 100 in gw2, 200 in gw4.
-        self.assertEqual(m[alpha], [{"threshold": 100, "gw": 2}, {"threshold": 200, "gw": 4}])
-        # Bravo: 50, 100, 180, 200 -- crosses 100 in gw2, 200 in gw4.
-        self.assertEqual(m[bravo], [{"threshold": 100, "gw": 2}, {"threshold": 200, "gw": 4}])
-        # Charlie: 40, 80, 120, 170 -- crosses 100 in gw3, never reaches 200.
-        self.assertEqual(m[charlie], [{"threshold": 100, "gw": 3}])
-
-
 class RemovedSectionsTest(unittest.TestCase):
-    def test_weekly_awards_are_no_longer_built(self):
+    def test_data_for_removed_tabs_is_no_longer_built(self):
         tmp = Path(tempfile.mkdtemp())
         try:
             write_live_round_fixture(tmp)
-            self.assertNotIn("weekly_awards", build_stats.build(tmp))
+            d = build_stats.build(tmp)
+            for gone in ("weekly_awards", "justice", "streaks", "milestones"):
+                self.assertNotIn(gone, d)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
