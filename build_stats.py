@@ -727,9 +727,9 @@ def build(raw=RAW, now=None):
 # One row per player per match played (minutes > 0), for the All players
 # tab's season history pop-up: [fixture id, minutes, goals, assists,
 # clean sheets, defensive contributions, bonus, BPS, points, provisional
-# bonus]. Kept as compact lists -- ~300 players play each gameweek.
+# bonus, saves]. Kept as compact lists -- ~300 players play each gameweek.
 HISTORY_FIELDS = ("fixture", "minutes", "goals_scored", "assists", "clean_sheets",
-                  "defensive_contribution", "bonus", "bps", "points", "bonus_provisional")
+                  "defensive_contribution", "bonus", "bps", "points", "bonus_provisional", "saves")
 
 
 def _player_history(raw, gws, team_short, provisional, cur):
@@ -740,7 +740,7 @@ def _player_history(raw, gws, team_short, provisional, cur):
     (minutes, clean sheet, points). The live gameweek's provisional bonus
     (see _provisional_bonus) is added to that match's bonus and points."""
     fixtures, rows = {}, {}
-    per_fx_keys = ("goals_scored", "assists", "defensive_contribution", "bonus", "bps")
+    per_fx_keys = ("goals_scored", "assists", "defensive_contribution", "bonus", "bps", "saves")
     for gw in gws:
         live = _load(Path(raw) / "live" / f"gw{gw}.json", {}) or {}
         fx_stats = {}
@@ -779,7 +779,7 @@ def _player_history(raw, gws, team_short, provisional, cur):
                 prov = (provisional.get(fid) or {}).get(el, 0) if gw == cur else 0
                 rows.setdefault(str(el), []).append([
                     fid, minutes, vals["goals_scored"], vals["assists"], vals["clean_sheets"],
-                    vals["defensive_contribution"], vals["bonus"] + prov, vals["bps"], pts + prov, prov])
+                    vals["defensive_contribution"], vals["bonus"] + prov, vals["bps"], pts + prov, prov, vals["saves"]])
     return {"fields": list(HISTORY_FIELDS), "teams": {str(k): v for k, v in team_short.items()},
             "fixtures": fixtures, "rows": rows}
 

@@ -298,6 +298,9 @@ details.info[open] .sub { margin-top: 6px; }
 @media (max-width: 480px) { .modal-card.wide { padding: 14px 12px; } .modal-backdrop { padding: 10px; } .sq-tbl { font-size: 12px; } .sq-tbl th:not(:first-child), .sq-tbl td:not(:first-child) { padding: 6px 2px; } }
 .sq-tbl td.num { font-variant-numeric: tabular-nums; }
 .sq-tbl th:first-child, .sq-tbl td:first-child { position: sticky; left: 0; background: var(--surface); z-index: 1; padding-right: 6px; }
+.pl-link { all: unset; cursor: pointer; text-decoration: underline dotted; text-decoration-color: var(--muted); text-underline-offset: 3px; }
+.pl-link:hover { text-decoration-style: solid; text-decoration-color: currentColor; }
+.pl-link:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 3px; }
 .ph-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 0 0 6px; }
 .ph-meta .sg-flag { margin-left: 0; }
 .ph-tiles { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin: 8px 0 12px; }
@@ -723,6 +726,14 @@ const bonusBox = (n, extra = "", prov = 0) => n > 0
 
 /* a player's season, match by match (All players tab) */
 const PH = D.player_history || { fields: [], teams: {}, fixtures: {}, rows: {} };
+const APById = Object.fromEntries((D.all_players || []).map(p => [p.id, p]));
+// Any player name on the site can open their season: a plain-looking
+// button with a dotted underline (All players keeps its › marker).
+function playerLink(p, label = p.name) {
+  if (!APById[p.id]) return label;
+  return h("button", { type: "button", class: "pl-link", title: "Season match by match",
+    onclick: ev => { ev.stopPropagation(); openPlayerHistory(p.id); } }, label);
+}
 const HSTATUS = { d: "Doubtful", i: "Injured", s: "Suspended", u: "Unavailable", n: "Unavailable" };
 function playerMatches(p) {
   const F = PH.fields, idx = k => F.indexOf(k);
@@ -742,8 +753,15 @@ function playerMatches(p) {
     return { fid, f, home, opp, gf, ga, res, s: played.get(fid) || null };
   }).filter(Boolean).sort((a, b) => b.f.gw - a.f.gw || String(b.f.kickoff).localeCompare(String(a.f.kickoff)));
 }
-function openPlayerHistory(p) {
+function openPlayerHistory(pOrId) {
+  const p = APById[typeof pOrId === "object" ? pOrId.id : pOrId] || pOrId;
+  if (!p || typeof p !== "object") return;
   const rows = playerMatches(p);
+  // Keepers don't earn DEFCON points, so their DC column becomes Saves.
+  const gk = p.pos === "GKP";
+  // Opened from inside another pop-up (a match, a club squad, a lineup
+  // player): keep that pop-up's content so "Back" returns to it as it was.
+  const prev = modalBackdrop.hidden ? null : { nodes: [...modalCard.childNodes], cls: modalCard.className };
   const blank = v => (v ? fmt(v) : "");
   const resCell = m => {
     const score = m.gf == null ? "" : `${m.gf}–${m.ga}`;
@@ -763,7 +781,7 @@ function openPlayerHistory(p) {
     else tr.append(
       h("td", { class: "num" }, fmt(s.minutes)), h("td", { class: "num" }, blank(s.goals_scored)),
       h("td", { class: "num" }, blank(s.assists)), h("td", { class: "num", "data-sort": s.clean_sheets }, s.clean_sheets ? "✓" : ""),
-      h("td", { class: "num" }, blank(s.defensive_contribution)),
+      h("td", { class: "num" }, blank(gk ? s.saves : s.defensive_contribution)),
       h("td", { class: "num", "data-sort": s.bonus }, bonusBox(s.bonus, "", s.bonus_provisional)),
       h("td", { class: "num win" }, fmt(s.points)));
     return tr;
@@ -775,18 +793,21 @@ function openPlayerHistory(p) {
   modalCard.textContent = "";
   modalCard.append(
     h("button", { type: "button", class: "ghost", style: "float:right", onclick: closeModal }, "Close"),
-    h("h3", { class: "mx-title" }, p.name),
+    h("h3", { class: "mx-title", style: "clear:left" }, p.name),
     h("p", { class: "sub ph-meta" }, `${p.club} · ${p.pos} · `, owner,
       HSTATUS[p.status] ? h("span", { class: `sg-flag ${p.status === "d" ? "warn" : "bad"}`, title: p.news || HSTATUS[p.status] },
         p.status === "d" && p.chance != null ? `${p.chance}%` : HSTATUS[p.status]) : null),
     p.news ? h("p", { class: "sub", style: "margin-top:0" }, p.news) : "",
     h("div", { class: "ph-tiles" }, tile("Pts", fmt(p.total_points)), tile("Min", fmt(p.minutes)), tile("G", fmt(p.goals_scored)),
-      tile("A", fmt(p.assists)), tile("CS", fmt(p.clean_sheets)), tile("DC", fmt(p.defensive_contribution)), tile("B", fmt(p.bonus))),
+      tile("A", fmt(p.assists)), tile("CS", fmt(p.clean_sheets)), gk ? tile("Saves", fmt(p.saves)) : tile("DC", fmt(p.defensive_contribution)), tile("B", fmt(p.bonus))),
     rows.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "mx-tbl sq-tbl ph-tbl" },
-      h("thead", {}, h("tr", {}, ["Match", "Result", "Min", "G", "A", "CS", "DC", "B", "Pts"].map((x, i) => h("th", { class: i ? "" : "l" }, x)))),
+      h("thead", {}, h("tr", {}, ["Match", "Result", "Min", "G", "A", "CS", gk ? "Sv" : "DC", "B", "Pts"].map((x, i) => h("th", { class: i ? "" : "l", title: x === "Sv" ? "Saves" : null }, x)))),
       h("tbody", {}, body))) : emptyMsg("No matches played yet this season."),
-    h("p", { class: "sub mx-legend" }, "Newest first. W win · D draw · L loss · G goals · A assists · CS clean sheet · DC defensive contributions · B bonus."));
+    h("p", { class: "sub mx-legend" }, `Newest first. W win · D draw · L loss · G goals · A assists · CS clean sheet · ${gk ? "Sv saves" : "DC defensive contributions"} · B bonus.`));
+  if (prev) modalCard.prepend(h("button", { type: "button", class: "ghost", style: "float:left;margin-right:10px",
+    onclick: () => { modalCard.className = prev.cls; modalCard.replaceChildren(...prev.nodes); } }, "‹ Back"));
   modalBackdrop.hidden = false;
+  modalCard.scrollTop = 0;
 }
 
 /* tabs */
@@ -987,7 +1008,7 @@ pg = panels.transactions;
     const playerRow = (p, kind) => h("div", { class: "sg-row" },
       h("span", { class: `sg-tag ${kind}` }, kind === "in" ? "IN" : "OUT"),
       h("div", { class: "sg-who" },
-        h("div", { class: "sg-name" }, h("b", {}, p.name), " ", h("span", { class: "sg-club" }, p.club), flag(p)),
+        h("div", { class: "sg-name" }, h("b", {}, playerLink(p)), " ", h("span", { class: "sg-club" }, p.club), flag(p)),
         h("div", { class: "sg-meta" },
           [`form ${p.form.toFixed(1)}`, `${p.ppg.toFixed(1)} ppg`, `${fmt(p.minutes)} min`].flatMap((t, i) => [i ? " · " : null, h("span", { class: "nw" }, t)]),
           p.news ? ` · ${p.news}` : null)),
@@ -1085,8 +1106,8 @@ pg = panels.transactions;
         h("td", { class: "l" }, h("span", { class: "who" }, dot(byId[x.entry_id]), nameOf(byId[x.entry_id]))),
         h("td", { class: "l" }, kindName(x)),
         h("td", { class: "l" }, h("span", { class: ok ? "up" : "down" }, ok ? "Accepted" : "Denied")),
-        h("td", { class: "l" }, x.in ? h("span", {}, x.in.name, h("span", { class: "pos" }, x.in.pos)) : "–"),
-        h("td", { class: "l" }, x.out ? h("span", {}, x.out.name, h("span", { class: "pos" }, x.out.pos)) : "–")));
+        h("td", { class: "l" }, x.in ? h("span", {}, playerLink(x.in), h("span", { class: "pos" }, x.in.pos)) : "–"),
+        h("td", { class: "l" }, x.out ? h("span", {}, playerLink(x.out), h("span", { class: "pos" }, x.out.pos)) : "–")));
     }
     more.hidden = list.length <= LIM;
     more.textContent = showAll ? "Show fewer" : `Show all ${list.length}`;
@@ -1119,7 +1140,7 @@ if (gws.length) {
     const more = h("button", { class: "ghost", type: "button", style: "margin-top:10px",
       onclick: () => { showAll = !showAll; render(); } });
     const row = p => h("tr", {},
-      h("td", { class: "l" }, p.name,
+      h("td", { class: "l" }, playerLink(p),
         p.on_squad ? h("span", { class: "tag-squad", style: "margin-left:6px" }, "Squad") : null,
         h("span", { class: "pos" }, p.pos), h("span", { class: "meta" }, ` ${p.team}`)),
       h("td", { class: "num" }, p.starts),
@@ -1172,7 +1193,7 @@ if (gws.length) {
         "data-sort": c.sort ? c.sort(r) : null }, c.get(r))))))));
   }
   const missedTable = rankedList(P.missed || [], [
-    { label: "Player", get: p => h("span", {}, p.name, h("span", { class: "pos" }, p.pos)) },
+    { label: "Player", get: p => h("span", {}, playerLink(p), h("span", { class: "pos" }, p.pos)) },
     { label: "Club", get: p => p.team },
     { label: "Manager", get: p => h("span", { class: "who" }, dot(byId[p.entry_id]), nameOf(byId[p.entry_id])), sort: p => nameOf(byId[p.entry_id]) },
     { label: "GW", get: p => liveGw(p.gw) },
@@ -1183,7 +1204,7 @@ if (gws.length) {
     card("Biggest bench misses", null, missedTable)));
   pg.append(card("Biggest single-player rounds", null,
     rankedList(P.best_rounds.slice(0, 6), [
-      { label: "Player", get: p => p.name },
+      { label: "Player", get: p => playerLink(p) },
       { label: "Manager", get: p => h("span", { class: "who" }, dot(byId[p.entry_id]), nameOf(byId[p.entry_id])), sort: p => nameOf(byId[p.entry_id]) },
       { label: "GW", get: p => liveGw(p.gw) },
       { label: "Points", get: p => p.points },
@@ -1225,7 +1246,9 @@ pg = panels.liveround;
           statRow("Minutes", fmt(p.minutes)), statRow("Goals", fmt(p.goals_scored)),
           statRow("Assists", fmt(p.assists)), statRow("Clean sheet", p.clean_sheets ? "Yes" : "No"),
           statRow("Defensive contribution", fmt(p.defensive_contribution)), statRow("Bonus", bonusText(p)),
-          statRow("BPS", fmt(p.bps))));
+          statRow("BPS", fmt(p.bps))),
+        APById[p.id] ? h("button", { type: "button", class: "ghost", style: "margin-top:14px;width:100%",
+          onclick: () => openPlayerHistory(p.id) }, "Season match by match ›") : "");
       modalBackdrop.hidden = false;
     }
     const chip = p => h("button", { type: "button", class: p.minutes > 0 ? "player-chip played" : "player-chip", onclick: () => openPlayerModal(p) },
@@ -1311,7 +1334,7 @@ pg = panels.liveround;
       const sideTable = s => s.players.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "mx-tbl" },
         h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Player"), ["Min", "G", "A", "CS", "DC", "BPS", "B", "Pts"].map(t => h("th", {}, t)))),
         h("tbody", {}, s.players.map(p => h("tr", {},
-          h("td", { class: "l", "data-sort": p.name }, h("span", { class: "mx-who" }, ownerDot(p), h("span", { class: "mx-nm" }, p.name),
+          h("td", { class: "l", "data-sort": p.name }, h("span", { class: "mx-who" }, ownerDot(p), h("span", { class: "mx-nm" }, playerLink(p)),
             h("span", { class: "mx-pos" }, p.pos),
             p.yellow_cards ? h("span", { class: "mx-card y", title: "Yellow card" }) : null,
             p.red_cards ? h("span", { class: "mx-card r", title: "Red card" }) : null,
@@ -1402,7 +1425,7 @@ pg = panels.liveround;
     }
     function row(p) {
       return h("tr", {},
-        h("td", { class: "l" }, p.name), h("td", { class: "l" }, p.team),
+        h("td", { class: "l" }, playerLink(p)), h("td", { class: "l" }, p.team),
         h("td", { class: "l" }, p.owner_entry_id == null ? h("span", { class: "tag-free" }, "Free agent") : ownerOf(p)),
         h("td", { class: "num win" }, fmt(p.points)), h("td", { class: "num" }, fmt(p.minutes)),
         h("td", { class: "num" }, fmt(p.goals_scored)), h("td", { class: "num" }, fmt(p.assists)),
@@ -1640,7 +1663,7 @@ pg = panels.fixtures;
         onclick: () => { showZero = !showZero; paint(); } });
       const blank = v => (v ? fmt(v) : "");
       const playerCell = p => h("td", { class: "l sq-name" },
-        h("span", { class: "sq-nm" }, p.name),
+        h("span", { class: "sq-nm" }, playerLink(p)),
         h("span", { class: "sq-meta" }, h("span", { class: "pos", style: "margin-left:0" }, p.pos),
           p.owner_entry_id != null ? h("span", { title: `Owned by ${nameOf(byId[p.owner_entry_id])}` }, dot(byId[p.owner_entry_id]))
             : h("span", { class: "tag-free sm" }, "FA"),

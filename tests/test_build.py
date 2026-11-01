@@ -1269,6 +1269,9 @@ class PlayerHistoryTest(unittest.TestCase):
                                      {"stat": "goals_scored", "value": 1, "points": 4}], 1]],
                        "stats": {"minutes": 90, "goals_scored": 1, "assists": 0, "clean_sheets": 0,
                                  "defensive_contribution": 7, "bonus": 3, "bps": 40, "total_points": 9}},
+                "11": {"explain": [[[{"stat": "minutes", "value": 90, "points": 2},
+                                     {"stat": "saves", "value": 6, "points": 2}], 1]],
+                       "stats": {"minutes": 90, "saves": 6, "total_points": 4}},
                 "20": {"explain": [[[{"stat": "minutes", "value": 0, "points": 0}], 1]],
                        "stats": {"minutes": 0, "total_points": 0}},
             }})
@@ -1315,6 +1318,10 @@ class PlayerHistoryTest(unittest.TestCase):
         self.assertEqual((rows[3]["minutes"], rows[3]["goals_scored"], rows[3]["bps"], rows[3]["points"]),
                          (30, 2, 50, 9))
         self.assertEqual(rows[2]["points"] + rows[3]["points"], 12)
+
+    def test_saves_per_match(self):
+        self.assertEqual(self.rows(self.build(), 11)[1]["saves"], 6)
+        self.assertEqual(self.rows(self.build(), 10)[1]["saves"], 0)
 
     def test_zero_minute_appearances_are_left_out(self):
         self.assertEqual(self.rows(self.build(), 20), {})
