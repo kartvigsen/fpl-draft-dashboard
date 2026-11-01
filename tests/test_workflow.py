@@ -131,49 +131,74 @@ def save_step_script():
 
 class SaveStepPushRetryTest(unittest.TestCase):
     """Runs the real save-step script against a fake git whose first N
-    pushes fail, the way GitHub's occasional 500 on push does."""
+    pushes are refused -- another run saved newer data first, or GitHub
+    answered with a 500 -- and a fake python3 standing in for update.py."""
 
-    def run_save(self, failing_pushes):
+    def run_save(self, failing_pushes, changes_after_rebuild=True):
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(lambda: __import__("shutil").rmtree(tmp, ignore_errors=True))
         (tmp / "fails_left").write_text(str(failing_pushes))
+        (tmp / "rebuilt").write_text("0")
         git = tmp / "git"
         git.write_text(textwrap.dedent(f"""\
             #!/bin/bash
-            echo "$*" >> {tmp}/calls
+            echo "git $*" >> {tmp}/calls
             case "$1" in
-              diff) exit 1 ;;   # there are staged changes
+              diff)   # staged changes? always on the first build; after a rebuild, as configured
+                if [ "$(cat {tmp}/rebuilt)" = 1 ] && [ "{int(changes_after_rebuild)}" = 0 ]; then exit 0; fi
+                exit 1 ;;
               push)
                 n=$(cat {tmp}/fails_left)
                 if [ "$n" -gt 0 ]; then echo $((n - 1)) > {tmp}/fails_left; exit 1; fi ;;
             esac
             exit 0
             """))
+        py = tmp / "python3"
+        py.write_text(f"#!/bin/bash\necho \"python3 $*\" >> {tmp}/calls\necho 1 > {tmp}/rebuilt\n")
         sleep = tmp / "sleep"
         sleep.write_text("#!/bin/bash\necho \"sleep $*\" >> %s/calls\n" % tmp)
-        git.chmod(0o755)
-        sleep.chmod(0o755)
-        env = {**os.environ, "PATH": f"{tmp}:{os.environ['PATH']}"}
+        for f in (git, py, sleep):
+            f.chmod(0o755)
+        env = {**os.environ, "PATH": f"{tmp}:{os.environ['PATH']}", "GITHUB_REF_NAME": "main"}
         proc = subprocess.run(["bash", "-e", "-c", save_step_script()], env=env, capture_output=True, text=True)
         calls = (tmp / "calls").read_text().splitlines()
-        return proc.returncode, calls
+        return proc.returncode, [c for c in calls if not c.startswith(("git config", "git add"))]
 
     def test_a_clean_push_happens_once(self):
         code, calls = self.run_save(0)
         self.assertEqual(code, 0)
-        self.assertEqual([c for c in calls if c.startswith(("push", "pull", "sleep"))], ["push"])
+        self.assertEqual(calls, ["git diff --cached --quiet", "git commit -m " + calls[1].split("-m ", 1)[1], "git push"])
 
-    def test_a_transient_failure_is_retried_after_catching_up_with_main(self):
-        code, calls = self.run_save(2)
+    def test_a_refused_push_starts_over_from_the_latest_main_instead_of_merging(self):
+        # The night-time failure: another run had saved newer data, and a
+        # rebase can't merge generated files. Now: fetch, reset, rebuild, retry.
+        code, calls = self.run_save(1)
         self.assertEqual(code, 0)
-        self.assertEqual([c for c in calls if c.startswith(("push", "pull", "sleep"))],
-                         ["push", "sleep 15", "pull --rebase", "push", "sleep 30", "pull --rebase", "push"])
+        steps = [c for c in calls if not c.startswith(("git diff", "git commit"))]
+        self.assertEqual(steps, ["git push", "sleep 15", "git fetch origin main", "git reset --hard origin/main",
+                                 "python3 update.py", "git push"])
+        self.assertFalse(any("rebase" in c or "pull" in c for c in calls))
 
-    def test_three_failed_pushes_fail_the_run(self):
+    def test_nothing_new_after_rebuilding_means_done_without_pushing_again(self):
+        code, calls = self.run_save(1, changes_after_rebuild=False)
+        self.assertEqual(code, 0)
+        self.assertEqual(sum(c == "git push" for c in calls), 1)
+        self.assertEqual(sum(c.startswith("git commit") for c in calls), 1)
+
+    def test_three_refused_pushes_fail_the_run(self):
         code, calls = self.run_save(3)
         self.assertNotEqual(code, 0)
-        self.assertEqual(sum(c == "push" for c in calls), 3)
+        self.assertEqual(sum(c == "git push" for c in calls), 3)
+        self.assertEqual(sum(c == "python3 update.py" for c in calls), 2)
 
+
+class CheckoutTest(unittest.TestCase):
+    def test_runs_start_from_the_branchs_latest_commit(self):
+        # Not the commit the run was triggered on, which can be stale by
+        # the time a queued run starts.
+        step = WORKFLOW[WORKFLOW.index("- uses: actions/checkout@v5"):]
+        step = step[:step.index("\n\n")]
+        self.assertIn("ref: ${{ github.ref }}", step)
 
 if __name__ == "__main__":
     unittest.main()

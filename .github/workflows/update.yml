@@ -42,6 +42,11 @@ jobs:
       run: ${{ steps.gate.outputs.run }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          # The branch's latest commit, not the one this run was triggered
+          # on: a run that waited in the queue would otherwise start from
+          # data another run has since replaced.
+          ref: ${{ github.ref }}
 
       - name: Decide whether to update
         id: gate
@@ -66,20 +71,27 @@ jobs:
         run: |
           git config user.name "fpl-dashboard-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add data docs
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-          else
+          branch="${GITHUB_REF_NAME:-main}"
+          # A push can be refused because another run (e.g. the external
+          # scheduler and GitHub's own timer firing together) saved newer
+          # data first, or by an occasional GitHub 500. Generated files can't
+          # be merged, so the run starts over from the latest branch: fresh
+          # download, rebuild, commit, push -- up to three tries.
+          for attempt in 1 2 3; do
+            git add data docs
+            if git diff --cached --quiet; then
+              echo "No changes to commit"
+              break
+            fi
             git commit -m "Update data $(date -u +%Y-%m-%d)"
-            # GitHub occasionally answers a push with a 500; retry before failing the run.
-            for attempt in 1 2 3; do
-              git push && break
-              if [ "$attempt" = 3 ]; then echo "Push failed 3 times, giving up."; exit 1; fi
-              echo "Push failed (attempt $attempt), retrying in $((attempt * 15))s."
-              sleep $((attempt * 15))
-              git pull --rebase
-            done
-          fi
+            if git push; then break; fi
+            if [ "$attempt" = 3 ]; then echo "Push failed 3 times, giving up."; exit 1; fi
+            echo "Push refused (attempt $attempt): rebuilding on the latest $branch in $((attempt * 15))s."
+            sleep $((attempt * 15))
+            git fetch origin "$branch"
+            git reset --hard "origin/$branch"
+            python3 update.py
+          done
 
       - name: Send the weekly digest, if a new gameweek just finished
         if: steps.gate.outputs.run == 'true'
