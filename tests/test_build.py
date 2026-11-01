@@ -932,7 +932,20 @@ class RoundMatchesTest(unittest.TestCase):
         self.assertEqual((striker["minutes"], striker["points"], striker["goals_scored"], striker["bonus"]), (90, 10, 1, 3))
         self.assertEqual(striker["owner_entry_id"], 201)
         self.assertEqual(home["Keeper"]["clean_sheets"], 1)
-        self.assertNotIn("bps", striker)  # only the stats the overview shows
+        self.assertEqual(striker["bps"], 40)
+        self.assertEqual(striker["bonus_provisional"], 0)  # official bonus already in
+
+    def test_a_live_match_without_official_bonus_gets_provisional_bonus_from_bps(self):
+        live = self.live()
+        live["fixtures"][2]["stats"].append(
+            {"s": "bps", "h": [{"element": 20, "value": 31}], "a": [{"element": 30, "value": 12}]})
+        prov = build_stats._provisional_bonus(live)
+        self.assertEqual(prov, {3: {20: 3, 30: 2}})  # match 1 has its official bonus, match 2 hasn't started
+        m = {x["id"]: x for x in build_stats._round_matches(live, self.BOOT, self.PLAYERS, {}, provisional=prov)}
+        d = m[3]["home"]["players"][0]
+        self.assertEqual((d["name"], d["bonus"], d["bonus_provisional"], d["points"], d["bps"]), ("Defender", 3, 3, 10, 31))
+        self.assertTrue(m[3]["bonus_provisional"])
+        self.assertFalse(m[1]["bonus_provisional"])
 
     def test_players_without_minutes_in_the_match_are_left_out(self):
         away = [p["name"] for p in self.matches()[0]["away"]["players"]]
@@ -977,6 +990,73 @@ class RoundMatchesTest(unittest.TestCase):
             self.assertIn("matches", d["current_round"])
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+
+class BonusFromBpsTest(unittest.TestCase):
+    """FPL's tie rules for 3/2/1 bonus."""
+
+    def bonus(self, *values):
+        return build_stats._bonus_from_bps(list(enumerate(values, start=1)))
+
+    def test_top_three_get_three_two_one(self):
+        self.assertEqual(self.bonus(40, 30, 20, 10), {1: 3, 2: 2, 3: 1})
+
+    def test_tie_for_first_both_get_three_and_the_next_gets_one(self):
+        self.assertEqual(self.bonus(30, 30, 25, 20), {1: 3, 2: 3, 3: 1})
+
+    def test_tie_for_second_both_get_two_and_nobody_gets_one(self):
+        self.assertEqual(self.bonus(30, 25, 25, 20), {1: 3, 2: 2, 3: 2})
+
+    def test_tie_for_third_all_get_one(self):
+        self.assertEqual(self.bonus(30, 25, 20, 20, 10), {1: 3, 2: 2, 3: 1, 4: 1})
+
+    def test_three_way_tie_for_first(self):
+        self.assertEqual(self.bonus(30, 30, 30, 20), {1: 3, 2: 3, 3: 3})
+
+    def test_no_bps_yet_means_no_bonus(self):
+        self.assertEqual(self.bonus(0, 0, 0), {})
+
+
+class ProvisionalBonusBuildTest(unittest.TestCase):
+    """The gameweek in progress folds provisional bonus into player points,
+    the manager's live score and the standings; finished rounds don't."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        mock.write_raw(self.tmp, [[50, 40], [30, 20]])
+        live = json.loads((self.tmp / "live" / "gw2.json").read_text())
+        # Manager 0's slot-1 player (element 1) tops BPS in a live match, with
+        # a free agent second; element 16 (manager 1, slot 1) third.
+        live["fixtures"] = [{"id": 7, "started": True, "finished": False, "finished_provisional": False,
+                             "team_h": 1, "team_a": 2, "kickoff_time": "2026-11-01T14:00:00Z", "stats": [
+                                 {"s": "bonus", "h": [], "a": []},
+                                 {"s": "bps", "h": [{"element": 1, "value": 35}, {"element": 100, "value": 28}],
+                                  "a": [{"element": 16, "value": 20}]}]}]
+        (self.tmp / "live" / "gw2.json").write_text(json.dumps(live))
+        self.d = build_stats.build(self.tmp)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_provisional_bonus_is_added_to_the_live_round_score_and_total(self):
+        pm = self.d["per_manager"]
+        self.assertEqual((pm["101"]["live_points"], pm["101"]["live_bonus"], pm["101"]["total"]), (33, 3, 83))
+        self.assertEqual((pm["102"]["live_points"], pm["102"]["live_bonus"], pm["102"]["total"]), (21, 1, 61))
+
+    def test_live_round_players_show_it_as_provisional(self):
+        rows = {p["id"]: p for p in self.d["current_round"]["all_players"]}
+        self.assertEqual((rows[1]["bonus"], rows[1]["bonus_provisional"]), (3, 3))
+        self.assertEqual((rows[100]["bonus"], rows[100]["bonus_provisional"]), (2, 2))
+
+    def test_season_totals_include_it_and_carry_bps(self):
+        ap = {p["id"]: p for p in self.d["all_players"]}
+        self.assertEqual(ap[1]["bonus_provisional"], 3)
+        self.assertIn("bps", ap[1])
+
+    def test_data_checks_accept_a_site_total_that_has_not_added_it_yet(self):
+        by = {c["entry_id"]: c for c in self.d["checks"]["standings"]}
+        self.assertEqual(by[101]["matches"], "through_current_before_provisional_bonus")
+        self.assertTrue(self.d["checks"]["all_ok"])
 
 
 class AllPlayersTest(unittest.TestCase):

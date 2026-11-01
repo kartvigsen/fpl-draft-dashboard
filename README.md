@@ -79,6 +79,7 @@ To stop it, disable the job in the scheduler, or delete the token in GitHub; a d
 
 - **Standings and total points:** update live while a gameweek is in progress, using that round's provisional score. The Standings table marks a live contribution with a small "(+N live)" next to a manager's points, and a note explains it while a round is in progress. The Overview tab's "Total points" and "Position in the league" charts extend one point further to show the live round too, labelled "GW_ live".
 - **Automatic substitutions, live:** the official site only fills in a round's real substitutions once it's finished, so a provisional score (while a round is still live) applies the same rule itself: a starting player with 0 minutes is covered by the next bench player (in bench order) who actually played — a goalkeeper only ever by the bench goalkeeper. A player only counts as "didn't play" once their team's match is over, so a starter whose match hasn't kicked off yet stays in the XI, and a bench player whose match is still to come holds their place in the queue rather than being skipped. Once the round finishes, the official figure is used instead, which can differ slightly if the real substitution rule's formation constraints kick in (not modelled here). Until then, this can make the live total differ from the one shown on the official site — "Data checks" recognizes this specific, expected gap (the site's own live figure not being subbed yet) and doesn't flag it as a mismatch; a row still shows it, labelled "site's live round isn't subbed yet", for transparency.
+- **Provisional bonus (live):** FPL only adds a match's bonus points about an hour after full time. Until then, the top three BPS (bonus point system) scores in every match that has kicked off get provisional bonus, using FPL's own rule: 3, 2 and 1, where ties share the higher award and push the next player down (two tied first both get 3 and the next gets 1; two tied second both get 2 and nobody gets 1; everyone tied third gets 1). It counts straight away in player points, lineups, managers' live round scores, standings and bench figures, and in the All players season totals. It's shown striped in the bonus boxes, and as "prov. bonus" in the Standings live note. Once FPL confirms a match's bonus, the official figure replaces it. "Data checks" accepts a site total that hasn't added the provisional bonus yet.
 - **Rounds won:** the top score among all managers in a gameweek. A tie counts as a win for each tied manager. Only finished gameweeks are eligible — a live round can't be "won" until bonus points and the rest are final.
 - **Transactions:** accepted moves only. Denied bids are shown separately.
 - **Highest and lowest round:** finished gameweeks only.
@@ -102,7 +103,9 @@ Everyone's lineup for the current (or just-finished) gameweek, without needing t
 
 **Matches** lists every Premier League match in the gameweek, grouped by day, in the style of a livescore app. Each row shows the status (FT, the match minute with a blinking tick such as 59', or the kick-off time), the score and the goal scorers; an own goal appears under the team it counted for, marked "(OG)". Tap a match to see each side's players who got minutes in it: minutes, goals, assists, clean sheet, DEFCON, bonus (the coloured boxes) and points, with yellow and red cards beside the name. A coloured dot shows which manager in the league owns the player. Stats are per match, so a double gameweek shows each match separately. The live minute comes from the classic FPL feed (the draft feed's match clock is always 0). It's a snapshot from the last update, so the page counts it on by itself, holding at 45+ until the next update confirms the second half and at 90+ after that. If the feed has no clock, it's estimated from the kick-off time.
 
-Below that, every Premier League player's points and extra stats (minutes, goals, assists, clean sheets, defensive contribution) for the round, highest first — filter by owner (including "Free agent"), club or position, or click a column to sort. Shows the top 20 by default; "Show all" expands to every player, and changing a filter collapses it back to 20.
+Each match pop-up also shows every player's **BPS** for that match, and the bonus column (provisional ones striped) can be sorted like the rest.
+
+Below that, every Premier League player's points and extra stats (minutes, goals, assists, clean sheets, defensive contribution, BPS, bonus) for the round, highest first — filter by owner (including "Free agent"), club or position, or click a column to sort. Shows the top 20 by default; "Show all" expands to every player, and changing a filter collapses it back to 20.
 
 This updates whenever `update.py` runs (a few times a day on the included schedule), not in real time.
 
@@ -121,6 +124,8 @@ Every Premier League player, not just the ones on a roster in this league — fi
 - **Draft rank** — the pick number from this league's original season draft (e.g. "Pick 23"). A player never drafted (picked up later, or never owned at all) shows "–".
 - **Owner** — whoever currently holds the player, which can differ from who drafted them if they moved by waiver or trade. Unowned players are shown as a green "Free agent" pill.
 - **Total points** / **Avg points** — the player's actual Premier League season total and per-game average, regardless of whether their fantasy owner ever started them.
+- **BPS** — the player's season total in FPL's bonus point system (the score each match's 3/2/1 bonus is decided by).
+- **Bonus** — season bonus points earned. While a round is live it includes provisional bonus, marked "(+N live)".
 
 The table shows the full Premier League player pool by default — untick "Show every player" to narrow it to players who are or have been owned in this league this season (drafted, waivered or traded at some point).
 
@@ -150,6 +155,10 @@ From then on, the scheduled workflow sends the digest automatically the first ti
 ## New season
 
 Draft leagues get a new ID each season. Change `league_id` in `config.json` and run `python3 update.py`. The next update automatically detects that the league changed (or that the cache predates this check) and re-downloads everything, so last season's cached "finished" gameweeks can't leak into the new season's numbers. You can still move or delete `data/raw/` yourself if you want to keep the old season's raw files elsewhere.
+
+## Sorting
+
+Every table on the page can be sorted: click (or tap) any column header to sort by it, and click again to reverse. Numbers sort high-to-low first and text A–Z first, and empty cells ("–") always go last. Lists with filters or a "Show all" limit (All moves, All players, the live round's players, Team info, Fixtures, a club's squad) sort the whole list, not just the rows on screen. In Fixtures, each "Fixture N" column sorts by that fixture's difficulty.
 
 ## Limits
 
