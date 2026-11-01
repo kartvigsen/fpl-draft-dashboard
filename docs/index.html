@@ -241,6 +241,9 @@ details.info[open] .sub { margin-top: 6px; }
 .bonus-box.b2 { background: #2a78d6; }
 .bonus-box.b1 { background: #8b5cf6; }
 .bonus-box.corner { position: absolute; top: -10px; left: -6px; min-width: 16px; height: 16px; line-height: 16px; font-size: 10.5px; box-shadow: 0 0 0 2px #fff; }
+/* Provisional bonus (from live BPS, not yet confirmed by FPL): striped. */
+.bonus-box.prov { background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.28) 0 3px, transparent 3px 6px); }
+.prov-note { color: var(--ink-2); font-weight: 400; font-size: 12px; margin-left: 6px; }
 .bonus-box.lg { min-width: 26px; height: 26px; line-height: 26px; border-radius: 7px; font-size: 15px; }
 .modal-card.wide { max-width: 600px; max-height: 88vh; overflow-y: auto; }
 .mx-list { display: grid; }
@@ -559,7 +562,7 @@ function lineChart(host, cfg) {
 function heatCell(v, maxCell, title) {
   const s = v === 0 ? -1 : Math.min(4, Math.ceil((v / maxCell) * 5) - 1);
   const dark = s >= 3;
-  return h("td", {}, h("div", { class: "cell", title,
+  return h("td", { "data-sort": v }, h("div", { class: "cell", title,
     style: s < 0 ? "color:var(--muted)" : `background:var(--h${Math.max(0, s)});color:${dark ? "var(--h-ink-dark)" : "var(--h-ink-light)"}` }, v || "·"));
 }
 function tableView(headers, rows) {
@@ -605,6 +608,57 @@ function makeSortHeader(cols, initialKey, initialDir) {
     },
   };
 }
+
+/* Every other table is sortable too: click a header to sort by that column
+   (numbers high-to-low first, text A-Z first), click again to reverse.
+   Tables built with makeSortHeader (filtered/limited lists, sorted on their
+   data) are left alone. A cell's data-sort overrides its text; empty cells
+   ("–", "·", "") always go last. */
+const EMPTY_CELL = new Set(["", "–", "-", "·"]);
+function cellKey(td) {
+  if (!td) return null;
+  const raw = td.dataset.sort != null ? td.dataset.sort : td.textContent.trim();
+  if (EMPTY_CELL.has(raw)) return null;
+  const n = raw.match(/^\D{0,5}?(-?\d+(?:\.\d+)?)/);
+  return { raw, num: n ? parseFloat(n[1]) : null };
+}
+function autoSortTable(table) {
+  if (table.dataset.autosort || !table.tHead || !table.tBodies[0]) return;
+  const tr = table.tHead.rows[table.tHead.rows.length - 1];
+  if (!tr || tr.querySelector('th[role="button"]')) return;
+  table.dataset.autosort = "1";
+  const body = table.tBodies[0];
+  let active = null, dir = 1;
+  [...tr.cells].forEach((th, ci) => {
+    const ind = h("span", { class: "sort-ind", "aria-hidden": "true" });
+    th.append(ind);
+    th.setAttribute("role", "button"); th.tabIndex = 0; th.setAttribute("aria-sort", "none");
+    const go = () => {
+      const rows = [...body.rows].filter(r => !r.querySelector("td[colspan]"));
+      const fixed = [...body.rows].filter(r => r.querySelector("td[colspan]"));
+      const keys = rows.map(r => cellKey(r.cells[ci]));
+      const numeric = keys.every(k => k == null || k.num != null);
+      if (active === ci) dir *= -1; else { active = ci; dir = numeric ? -1 : 1; }
+      const order = rows.map((r, i) => ({ r, k: keys[i], i })).sort((a, b) => {
+        if (a.k == null || b.k == null) return (a.k == null) - (b.k == null) || a.i - b.i;
+        const c = numeric ? a.k.num - b.k.num : a.k.raw.localeCompare(b.k.raw);
+        return c * dir || a.i - b.i;
+      });
+      body.append(...order.map(o => o.r), ...fixed);
+      [...tr.cells].forEach((x, j) => {
+        x.setAttribute("aria-sort", j === active ? (dir === 1 ? "ascending" : "descending") : "none");
+        const s = x.querySelector(".sort-ind"); if (s) s.textContent = j === active ? (dir === 1 ? " ▲" : " ▼") : "";
+      });
+    };
+    th.addEventListener("click", go);
+    th.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
+  });
+}
+function autoSortAll(root) { (root.querySelectorAll ? root : document).querySelectorAll("table").forEach(autoSortTable); }
+// Tables that appear later (modals, team switchers) are picked up as they're added.
+new MutationObserver(muts => { for (const m of muts) for (const n of m.addedNodes) if (n.nodeType === 1) {
+  if (n.tagName === "TABLE") autoSortTable(n); else autoSortAll(n);
+} }).observe(document.body, { childList: true, subtree: true });
 
 function barList(rows, unit) {
   const max = Math.max(1, ...rows.map(r => r.value));
@@ -718,15 +772,17 @@ pg.append(tiles);
 /* standings */
 pg.append(section("Standings"));
 if (D.live_round) pg.append(h("p", { class: "sub" },
-  `Pts and bench pts include live GW${D.live_round.gw}.`));
+  `Pts and bench pts include live GW${D.live_round.gw}, with provisional bonus (top 3 BPS per match) until FPL confirms it.`));
 {
   const head = ["Team", "Pts", "Avg", "Rounds won", "Best", "Worst", "Moves", "Bench pts"];
   const body = ranked.map(m => {
     const p = PM[m.entry_id];
     return h("tr", {},
-      h("td", {}, h("span", { class: "who" }, h("span", { class: "rk" }, p.rank), dot(m), h("span", {}, nameOf(m), h("small", {}, m.manager)))),
-      h("td", { class: "num win" }, fmt(p.total),
-        p.live_points != null ? h("span", { style: "color:var(--ink-2);font-weight:400;font-size:12px;margin-left:6px" }, `(+${p.live_points} live)`) : null),
+      h("td", { "data-sort": nameOf(m) }, h("span", { class: "who" }, h("span", { class: "rk" }, p.rank), dot(m), h("span", {}, nameOf(m), h("small", {}, m.manager)))),
+      h("td", { class: "num win", "data-sort": p.total }, fmt(p.total),
+        p.live_points != null ? h("span", { class: "prov-note",
+          title: p.live_bonus ? `Includes ${p.live_bonus} provisional bonus point${p.live_bonus === 1 ? "" : "s"} from live BPS` : null },
+          `(+${p.live_points} live${p.live_bonus ? `, ${p.live_bonus} prov. bonus` : ""})`) : null),
       h("td", { class: "num" }, p.average ?? "–"),
       h("td", { class: "num" }, p.wins),
       h("td", { class: "num" }, p.best ? `${p.best.points} (GW${p.best.gw})` : "–"),
@@ -820,7 +876,8 @@ else {
   pg.append(h("div", { class: "grid2" },
     card("Rounds won", null,
       barList(ranked.map(m => ({ m, value: PM[m.entry_id].wins, note: `${PM[m.entry_id].lows} lowest-scoring round${PM[m.entry_id].lows === 1 ? "" : "s"}` })), "rounds won")),
-    card("Records", null, h("div", { class: "tbl-wrap" }, h("table", {}, h("tbody", {},
+    card("Records", null, h("div", { class: "tbl-wrap" }, h("table", {},
+      h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Record"), h("th", {}, "Value"), h("th", { class: "l" }, "Who"))), h("tbody", {},
       recRows.map(r => h("tr", {}, h("td", { class: "l" }, r[0]), h("td", { class: "num win" }, r[1]), h("td", { class: "l" }, r[2])))))))));
 }
 
@@ -875,13 +932,13 @@ pg = panels.transactions;
     note: `${PM[m.entry_id].tx_free_agent} free agent · ${PM[m.entry_id].tx_waiver} waiver · ${PM[m.entry_id].tx_denied} denied` }));
   const allG = D.rounds.map(r => r.gw);
   const maxCell = Math.max(1, ...M.flatMap(m => allG.map(g => T.matrix[m.entry_id][g] || 0)));
-  const heatRows = ranked.map(m => h("tr", {}, h("td", { class: "l" }, h("span", { class: "who" }, dot(m), nameOf(m))),
+  const heatRows = ranked.map(m => h("tr", {}, h("td", { class: "l", "data-sort": nameOf(m) }, h("span", { class: "who" }, dot(m), nameOf(m))),
     allG.map(g => heatCell(T.matrix[m.entry_id][g] || 0, maxCell, `${nameOf(m)}, GW${g}: ${T.matrix[m.entry_id][g] || 0} accepted`))));
   const moves = T.moves;
   pg.append(card("Accepted transactions", null, barList(rows, "moves")));
   pg.append(card("Moves per gameweek", null,
     h("div", { class: "tbl-wrap" }, h("table", { class: "heat" },
-      h("thead", {}, h("tr", {}, h("th", { class: "l" }, ""), allG.map(g => h("th", {}, g)))),
+      h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Team"), allG.map(g => h("th", {}, g)))),
       h("tbody", {}, heatRows)))));
 
   const LIM = 12;
@@ -914,8 +971,25 @@ pg = panels.transactions;
       return true;
     });
   }
+  const MOVE_COLS = [
+    { key: "gw", label: "GW", num: true, get: x => x.gw ?? 0 },
+    { key: "team", label: "Team", num: false, get: x => nameOf(byId[x.entry_id]) },
+    { key: "type", label: "Type", num: false, get: kindName },
+    { key: "result", label: "Result", num: false, get: x => (x.result === "a" ? "Accepted" : "Denied") },
+    { key: "in", label: "In", num: false, get: x => (x.in ? x.in.name : "") },
+    { key: "out", label: "Out", num: false, get: x => (x.out ? x.out.name : "") },
+  ];
+  // Newest first by default, as before (the backend list is ordered by time).
+  const moveOrder = new Map(moves.map((x, i) => [x, i]));
+  MOVE_COLS.unshift({ key: "time", label: "", num: true, get: x => -moveOrder.get(x) });
+  const moveSorter = makeSortHeader(MOVE_COLS, "time", -1);
+  const moveHead = h("thead", {});
   function paint() {
-    const list = filteredMoves();
+    const list = moveSorter.sorted(filteredMoves());
+    moveHead.textContent = "";
+    const htr = moveSorter.row(paint);
+    htr.firstChild.remove(); // the hidden "time" column has no header cell
+    moveHead.append(htr);
     body.textContent = "";
     for (const x of showAll ? list : list.slice(0, LIM)) {
       const ok = x.result === "a";
@@ -936,8 +1010,7 @@ pg = panels.transactions;
   paint();
   pg.append(card("All moves", null,
     h("div", { class: "filters" }, teamSel, typeSel, resultSel, gwSel, nameInput),
-    h("div", { class: "tbl-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["GW", "Team", "Type", "Result", "In", "Out"].map((x, i) =>
-      h("th", { class: i < 6 ? "l" : "" }, x)))), body)), more));
+    h("div", { class: "tbl-wrap" }, h("table", {}, moveHead, body)), more));
 }
 
 /* players */
@@ -1007,12 +1080,13 @@ if (gws.length) {
     if (!rows.length) return null;
     return h("div", { class: "tbl-wrap" }, h("table", {},
       h("thead", {}, h("tr", {}, cols.map((c, i) => h("th", { class: i ? "" : "l" }, c.label)))),
-      h("tbody", {}, rows.map(r => h("tr", {}, cols.map((c, i) => h("td", { class: i ? "num" : "l" }, c.get(r))))))));
+      h("tbody", {}, rows.map(r => h("tr", {}, cols.map((c, i) => h("td", { class: i ? "num" : "l",
+        "data-sort": c.sort ? c.sort(r) : null }, c.get(r))))))));
   }
   const missedTable = rankedList(P.missed || [], [
     { label: "Player", get: p => h("span", {}, p.name, h("span", { class: "pos" }, p.pos)) },
     { label: "Club", get: p => p.team },
-    { label: "Manager", get: p => h("span", { class: "who" }, dot(byId[p.entry_id]), nameOf(byId[p.entry_id])) },
+    { label: "Manager", get: p => h("span", { class: "who" }, dot(byId[p.entry_id]), nameOf(byId[p.entry_id])), sort: p => nameOf(byId[p.entry_id]) },
     { label: "GW", get: p => liveGw(p.gw) },
     { label: "Points", get: p => p.points },
   ]) || emptyMsg("No player has scored from a bench yet.");
@@ -1022,7 +1096,7 @@ if (gws.length) {
   pg.append(card("Biggest single-player rounds", null,
     rankedList(P.best_rounds.slice(0, 6), [
       { label: "Player", get: p => p.name },
-      { label: "Manager", get: p => h("span", { class: "who" }, dot(byId[p.entry_id]), nameOf(byId[p.entry_id])) },
+      { label: "Manager", get: p => h("span", { class: "who" }, dot(byId[p.entry_id]), nameOf(byId[p.entry_id])), sort: p => nameOf(byId[p.entry_id]) },
       { label: "GW", get: p => liveGw(p.gw) },
       { label: "Points", get: p => p.points },
     ])));
@@ -1038,9 +1112,12 @@ pg = panels.liveround;
 
     const POS_ORDER = ["GKP", "DEF", "MID", "FWD"];
     // 3 green, 2 blue, 1 purple; a double gameweek can exceed 3, shown as green.
-    const bonusBox = (n, extra = "") => n > 0
-      ? h("span", { class: `bonus-box b${Math.min(n, 3)} ${extra}`.trim(), title: `${n} bonus point${n === 1 ? "" : "s"}` }, n)
+    // Striped = provisional: from live BPS (top 3 in a match), not yet confirmed by FPL.
+    const bonusBox = (n, extra = "", prov = 0) => n > 0
+      ? h("span", { class: `bonus-box b${Math.min(n, 3)} ${prov ? "prov" : ""} ${extra}`.replace(/\s+/g, " ").trim(),
+          title: `${n} bonus point${n === 1 ? "" : "s"}${prov ? (prov === n ? " (provisional, from live BPS)" : ` (${prov} provisional, from live BPS)`) : ""}` }, n)
       : null;
+    const bonusText = p => p.bonus_provisional ? `${fmt(p.bonus)} (${p.bonus_provisional === p.bonus ? "" : `${p.bonus_provisional} `}provisional)` : fmt(p.bonus);
     const statLine = p => {
       const parts = [];
       if (p.minutes) parts.push(`${p.minutes}'`);
@@ -1059,17 +1136,18 @@ pg = panels.liveround;
       modalCard.append(
         h("button", { type: "button", class: "ghost", style: "float:right", onclick: closeModal }, "Close"),
         h("h3", {}, p.name), h("p", { class: "sub" }, `${p.team} · ${p.pos}${role}`),
-        h("p", { class: "pts" }, `${fmt(p.points)} pts`, bonusBox(p.bonus, "lg")),
+        h("p", { class: "pts" }, `${fmt(p.points)} pts`, bonusBox(p.bonus, "lg", p.bonus_provisional)),
         h("dl", { class: "modal-stats" },
           statRow("Minutes", fmt(p.minutes)), statRow("Goals", fmt(p.goals_scored)),
           statRow("Assists", fmt(p.assists)), statRow("Clean sheet", p.clean_sheets ? "Yes" : "No"),
-          statRow("Defensive contribution", fmt(p.defensive_contribution)), statRow("Bonus", fmt(p.bonus))));
+          statRow("Defensive contribution", fmt(p.defensive_contribution)), statRow("Bonus", bonusText(p)),
+          statRow("BPS", fmt(p.bps))));
       modalBackdrop.hidden = false;
     }
     const chip = p => h("button", { type: "button", class: p.minutes > 0 ? "player-chip played" : "player-chip", onclick: () => openPlayerModal(p) },
       p.is_captain ? h("span", { class: "badge c", title: "Captain" }, "C") :
         p.is_vice_captain ? h("span", { class: "badge vc", title: "Vice-captain" }, "V") : null,
-      bonusBox(p.bonus, "corner"),
+      bonusBox(p.bonus, "corner", p.bonus_provisional),
       h("div", { class: "nm" }, p.name), h("div", { class: "cl" }, p.team),
       h("div", { class: "pt" }, fmt(p.points)), h("div", { class: "st" }, statLine(p)));
 
@@ -1147,16 +1225,18 @@ pg = panels.liveround;
         ? h("span", { class: "dot", title: `Owned by ${nameOf(byId[p.owner_entry_id])}`, style: `background:${col(byId[p.owner_entry_id])}` }) : null;
       const blank = n => n ? n : "";
       const sideTable = s => s.players.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "mx-tbl" },
-        h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Player"), ["Min", "G", "A", "CS", "DC", "B", "Pts"].map(t => h("th", {}, t)))),
+        h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Player"), ["Min", "G", "A", "CS", "DC", "BPS", "B", "Pts"].map(t => h("th", {}, t)))),
         h("tbody", {}, s.players.map(p => h("tr", {},
-          h("td", { class: "l" }, h("span", { class: "mx-who" }, ownerDot(p), h("span", { class: "mx-nm" }, p.name),
+          h("td", { class: "l", "data-sort": p.name }, h("span", { class: "mx-who" }, ownerDot(p), h("span", { class: "mx-nm" }, p.name),
             h("span", { class: "mx-pos" }, p.pos),
             p.yellow_cards ? h("span", { class: "mx-card y", title: "Yellow card" }) : null,
             p.red_cards ? h("span", { class: "mx-card r", title: "Red card" }) : null,
             p.own_goals ? h("span", { class: "mx-og", title: "Own goal" }, "OG") : null)),
-          h("td", { class: "num" }, p.minutes), h("td", { class: "num" }, blank(p.goals_scored)),
-          h("td", { class: "num" }, blank(p.assists)), h("td", { class: "num" }, p.clean_sheets ? "✓" : ""),
-          h("td", { class: "num" }, blank(p.defensive_contribution)), h("td", { class: "num" }, bonusBox(p.bonus)),
+          h("td", { class: "num" }, p.minutes), h("td", { class: "num", "data-sort": p.goals_scored }, blank(p.goals_scored)),
+          h("td", { class: "num", "data-sort": p.assists }, blank(p.assists)), h("td", { class: "num", "data-sort": p.clean_sheets }, p.clean_sheets ? "✓" : ""),
+          h("td", { class: "num", "data-sort": p.defensive_contribution }, blank(p.defensive_contribution)),
+          h("td", { class: "num" }, fmt(p.bps ?? 0)),
+          h("td", { class: "num", "data-sort": p.bonus }, bonusBox(p.bonus, "", p.bonus_provisional)),
           h("td", { class: "num win" }, p.points)))))) : emptyMsg("No players yet.");
 
       function openMatch(m) {
@@ -1172,7 +1252,8 @@ pg = panels.liveround;
           m.status === "upcoming" ? emptyMsg("Player stats appear once the match kicks off.") : h("div", {},
             h("h4", { class: "mx-side" }, m.home.name), sideTable(m.home),
             h("h4", { class: "mx-side" }, m.away.name), sideTable(m.away),
-            h("p", { class: "sub mx-legend" }, "A dot shows which manager in the league owns the player. G goals · A assists · CS clean sheet · DC defensive contributions · B bonus.")));
+            h("p", { class: "sub mx-legend" }, "A dot shows which manager in the league owns the player. G goals · A assists · CS clean sheet · DC defensive contributions · BPS bonus point system score · B bonus (striped = provisional: top 3 BPS until FPL confirms it, already counted in Pts)."),
+            m.bonus_provisional ? h("p", { class: "sub" }, "Bonus for this match is provisional, from the live BPS ranking.") : null));
         modalBackdrop.hidden = false;
       }
 
@@ -1218,6 +1299,7 @@ pg = panels.liveround;
       { key: "assists", label: "Assists", num: true, get: p => p.assists },
       { key: "clean_sheets", label: "CS", num: true, get: p => p.clean_sheets },
       { key: "defensive_contribution", label: "DEFCON", num: true, get: p => p.defensive_contribution },
+      { key: "bps", label: "BPS", num: true, get: p => p.bps ?? 0 },
       { key: "bonus", label: "Bonus", num: true, get: p => p.bonus },
     ];
     const sorter = makeSortHeader(COLS, "points", -1);
@@ -1241,7 +1323,8 @@ pg = panels.liveround;
         h("td", { class: "num win" }, fmt(p.points)), h("td", { class: "num" }, fmt(p.minutes)),
         h("td", { class: "num" }, fmt(p.goals_scored)), h("td", { class: "num" }, fmt(p.assists)),
         h("td", { class: "num" }, fmt(p.clean_sheets)), h("td", { class: "num" }, fmt(p.defensive_contribution)),
-        h("td", { class: "num" }, bonusBox(p.bonus) || fmt(p.bonus)));
+        h("td", { class: "num" }, fmt(p.bps ?? 0)),
+        h("td", { class: "num" }, bonusBox(p.bonus, "", p.bonus_provisional) || fmt(p.bonus)));
     }
     const more = h("button", { class: "ghost", type: "button", style: "margin-top:10px",
       onclick: () => { showAll = !showAll; render(); } });
@@ -1280,6 +1363,8 @@ pg = panels.allplayers;
     { key: "owner", label: "Owner", num: false, get: ownerOf },
     { key: "total_points", label: "Total points", num: true, get: p => p.total_points },
     { key: "avg_points", label: "Avg points", num: true, get: p => p.avg_points },
+    { key: "bps", label: "BPS", num: true, get: p => p.bps ?? 0 },
+    { key: "bonus", label: "Bonus", num: true, get: p => p.bonus ?? 0 },
   ];
   const sorter = makeSortHeader(COLS, "total_points", -1);
 
@@ -1307,7 +1392,11 @@ pg = panels.allplayers;
       h("td", { class: "l" }, p.name), h("td", { class: "l" }, p.club), h("td", { class: "l" }, p.pos),
       h("td", { class: "num" }, p.draft_pick == null ? "–" : `Pick ${p.draft_pick}`),
       h("td", { class: "l" }, p.owner_entry_id == null ? h("span", { class: "tag-free" }, "Free agent") : ownerOf(p)),
-      h("td", { class: "num" }, fmt(p.total_points)), h("td", { class: "num" }, p.avg_points.toFixed(1)));
+      h("td", { class: "num" }, fmt(p.total_points)), h("td", { class: "num" }, p.avg_points.toFixed(1)),
+      h("td", { class: "num" }, fmt(p.bps ?? 0)),
+      h("td", { class: "num" }, fmt(p.bonus ?? 0),
+        p.bonus_provisional ? h("span", { class: "prov-note", title: "Provisional bonus from the live round's BPS, not yet confirmed by FPL" },
+          `(+${p.bonus_provisional} live)`) : null));
   }
   function filtered() {
     const owner = ownerSel.value, pos = posSel.value, club = clubSel.value, name = nameInput.value.trim().toLowerCase();
@@ -1382,7 +1471,10 @@ pg = panels.fixtures;
       { key: "name", label: "Team", num: false, get: t => t.name },
       { key: "avg", label: "Avg FDR", num: true, get: t => { const a = avgFdr(t); return a == null ? Infinity : a; } },
     ];
-    const sorter = makeSortHeader(COLS, "avg", 1);
+    // Each fixture column sorts by that fixture's difficulty (no fixture = last).
+    for (let i = 0; i < maxCols; i++) COLS.push({ key: `fx${i}`, label: `Fixture ${i + 1}`, num: true, fx: i,
+      get: t => { const f = t.fixtures[i]; return f && f.difficulty != null ? f.difficulty : Infinity; } });
+    let sorter = makeSortHeader(COLS, "avg", 1);
 
     const cell = f => {
       if (!f) return h("td", {}, h("div", { class: "cell" }, "–"));
@@ -1408,6 +1500,7 @@ pg = panels.fixtures;
       box.onchange = () => {
         if (!box.checked && included.filter(Boolean).length <= 1) { box.checked = true; return; }
         included[i] = box.checked;
+        if (!box.checked && sorter.key === `fx${i}`) sorter = makeSortHeader(COLS, "avg", 1);
         render();
       };
       return h("label", { style: "display:flex;align-items:center;gap:5px;font-size:13px;color:var(--ink-2)" },
@@ -1433,6 +1526,7 @@ pg = panels.fixtures;
       { key: "a", label: "A", num: true, get: p => p.assists, title: "Assists" },
       { key: "cs", label: "CS", num: true, get: p => p.clean_sheets, title: "Clean sheets" },
       { key: "dc", label: "DC", num: true, get: p => p.defensive_contribution, title: "Defensive contributions (DEFCON)" },
+      { key: "bps", label: "BPS", num: true, get: p => p.bps ?? 0, title: "Bonus point system score (season)" },
       { key: "b", label: "B", num: true, get: p => p.bonus, title: "Bonus points" },
       { key: "form", label: "Form", num: true, get: p => p.form, title: "FPL form: average points per game, last 30 days" },
     ];
@@ -1478,7 +1572,7 @@ pg = panels.fixtures;
           h("td", { class: "num win" }, fmt(p.total_points)), h("td", { class: "num" }, fmt(p.minutes)),
           h("td", { class: "num" }, blank(p.goals_scored)), h("td", { class: "num" }, blank(p.assists)),
           h("td", { class: "num" }, blank(p.clean_sheets)), h("td", { class: "num" }, blank(p.defensive_contribution)),
-          h("td", { class: "num" }, blank(p.bonus)), h("td", { class: "num" }, p.form ? p.form.toFixed(1) : ""),
+          h("td", { class: "num" }, blank(p.bps)), h("td", { class: "num" }, blank(p.bonus)), h("td", { class: "num" }, p.form ? p.form.toFixed(1) : ""),
           cols.includes(SAVES_COL) ? h("td", { class: "num" }, blank(p.saves)) : null)));
         if (!list.length) body.append(h("tr", {}, h("td", { class: "l", colspan: String(cols.length) }, emptyMsg("No players have played yet."))));
         thead.textContent = "";
@@ -1498,7 +1592,7 @@ pg = panels.fixtures;
           h("span", { class: "gw" }, `GW${f.gw}`), `${f.opponent} (${f.home ? "H" : "A"})`))),
         h("div", { class: "sq-seg", role: "group", "aria-label": "Filter by position" }, posBtns),
         h("div", { class: "tbl-wrap" }, h("table", { class: "mx-tbl sq-tbl" }, thead, body)), zeroBtn,
-        h("p", { class: "sub mx-legend" }, "Season totals. A dot shows the league owner · FA free agent · G goals · A assists · CS clean sheets · DC defensive contributions · B bonus."));
+        h("p", { class: "sub mx-legend" }, "Season totals. A dot shows the league owner · FA free agent · G goals · A assists · CS clean sheets · DC defensive contributions · BPS bonus point system score · B bonus."));
       modalBackdrop.hidden = false;
     }
 
@@ -1524,7 +1618,8 @@ pg = panels.fixtures;
       countNote.textContent = `${fmt(sorted.length)} of ${fmt(FT.length)} teams`;
       thead.textContent = "";
       const tr = sorter.row(render);
-      for (let i = 0; i < maxCols; i++) if (included[i]) tr.append(h("th", {}, `Fixture ${i + 1}`));
+      // Drop header cells for fixtures left out of the ranking (and table).
+      [...tr.children].forEach((th, i) => { const c = COLS[i]; if (c.fx != null && !included[c.fx]) th.remove(); });
       thead.append(tr);
     }
     render();
@@ -1545,10 +1640,12 @@ pg = panels.fixtures;
 /* footer + checks */
 const chk = D.checks;
 const foot = h("div", { class: "foot" }, h("details", {}, h("summary", {}, "How it works"),
+  h("p", {}, "While a match is live, or finished but waiting for FPL to confirm bonus, the top three BPS scores in that match get provisional bonus (3, 2 and 1; ties share the higher award and push the next player down). It counts in player points, live scores and standings straight away, shown striped or marked \"prov.\", and is replaced by the official bonus once FPL adds it."),
   h("p", {}, "A round score is the total of a manager's starting XI after automatic substitutions. Standings and total points update live while a gameweek is in progress; rounds won and records only count once it finishes. Ties for the top score count as a win for every tied manager. Transactions count accepted moves only."),
   h("p", {}, "Data comes from the public FPL Draft API, which is unofficial and can change without notice.")));
 const dl = h("details", {}, h("summary", {}, chk.all_ok ? "Data checks: all passed" : "Data checks: please review"));
 const matchLabel = m => m === "through_finished_plus_live_unsubbed" ? "Match (site's live round isn't subbed yet)"
+  : m === "through_current_before_provisional_bonus" ? "Match (site hasn't added provisional bonus yet)"
   : m ? "Match" : "DIFFERENT";
 const chkRows = chk.standings.map(c => h("tr", {}, h("td", { class: "l" }, nameOf(byId[c.entry_id])),
   h("td", { class: "num" }, fmt(c.site_total)), h("td", { class: "num" }, fmt(c.computed_through_current)),
@@ -1559,6 +1656,7 @@ if (chk.lineup_vs_official_mismatches.length) dl.append(h("p", { class: "sub" },
 if (chk.missing_lineups.length) dl.append(h("p", { class: "sub" }, `${chk.missing_lineups.length} lineup file(s) missing.`));
 foot.append(dl);
 app.append(foot, modalBackdrop);
+autoSortAll(document);
 document.title = meta.league_name + " · FPL Draft";
 </script>
 <script>

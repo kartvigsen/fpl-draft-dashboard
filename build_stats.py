@@ -27,7 +27,60 @@ POS = {1: "GKP", 2: "DEF", 3: "MID", 4: "FWD"}
 
 
 SEASON_STAT_KEYS = ("minutes", "starts", "goals_scored", "assists", "clean_sheets",
-                    "defensive_contribution", "bonus", "saves", "yellow_cards", "red_cards")
+                    "defensive_contribution", "bonus", "bps", "saves", "yellow_cards", "red_cards")
+
+
+def _bonus_from_bps(bps_rows):
+    """FPL's bonus rule for one match: 3/2/1 to the top three BPS scores.
+    Ties share the higher award and push the next player down -- two tied
+    first get 3 each and the next gets 1; two tied second get 2 each and
+    the next gets nothing; any number tied third get 1 each.
+    bps_rows: [(element, bps)]. Returns {element: bonus}."""
+    out, placed = {}, 0
+    ordered = sorted(bps_rows, key=lambda r: -r[1])
+    i = 0
+    while i < len(ordered) and placed < 3:
+        value = ordered[i][1]
+        group = [e for e, v in ordered[i:] if v == value]
+        if value <= 0:
+            break
+        award = 3 - placed
+        for e in group:
+            out[e] = award
+        placed += len(group)
+        i += len(group)
+    return out
+
+
+def _provisional_bonus(live):
+    """Provisional bonus per match while FPL hasn't confirmed it yet:
+    {fixture id: {element: bonus}}, for every match that has kicked off
+    but has no official bonus in the feed. Once FPL adds the real bonus to
+    a match (usually about an hour after full time) it drops out of here
+    and the official figure, already in total_points, takes over."""
+    out = {}
+    for f in (live or {}).get("fixtures") or []:
+        if not f.get("started"):
+            continue
+        stats = {s.get("s"): s for s in f.get("stats") or []}
+        official = stats.get("bonus") or {}
+        if (official.get("h") or []) or (official.get("a") or []):
+            continue
+        bps = stats.get("bps") or {}
+        rows = [(it["element"], it.get("value", 0) or 0)
+                for side in ("h", "a") for it in (bps.get(side) or []) if it.get("element") is not None]
+        awards = _bonus_from_bps(rows)
+        if awards:
+            out[f.get("id")] = awards
+    return out
+
+
+def _sum_by_element(per_fixture):
+    tot = {}
+    for awards in per_fixture.values():
+        for e, v in awards.items():
+            tot[e] = tot.get(e, 0) + v
+    return tot
 
 
 def _num(v):
@@ -118,11 +171,19 @@ def build(raw=RAW, now=None):
     pp = {}      # gw -> {element: points}
     mins = {}    # gw -> {element: minutes played}
     team_fx = {}  # gw -> {team id: [fixtures]}, or None if the live file has no fixtures
+    # Provisional bonus (top 3 BPS per match not yet confirmed by FPL) only
+    # applies to the gameweek in progress; finished gameweeks are official.
+    prov_fx, prov_bonus = {}, {}
     for gw in started_gws:
         live = _load(raw / "live" / f"gw{gw}.json", {}) or {}
         elems = live.get("elements", {}) or {}
         pp[gw] = {int(k): (v.get("stats", {}) or {}).get("total_points", 0) or 0
                   for k, v in elems.items()}
+        if gw == cur and not cur_done:
+            prov_fx = _provisional_bonus(live)
+            prov_bonus = _sum_by_element(prov_fx)
+            for e, b in prov_bonus.items():
+                pp[gw][e] = pp[gw].get(e, 0) + b
         mins[gw] = {int(k): (v.get("stats", {}) or {}).get("minutes", 0) or 0
                     for k, v in elems.items()}
         if "fixtures" in live:
@@ -302,19 +363,23 @@ def build(raw=RAW, now=None):
     all_players = []
     for p in boot.get("elements", []):
         pid_ = p["id"]
+        prov = prov_bonus.get(pid_, 0)
         all_players.append({
             "id": pid_,
             "name": p.get("web_name") or p.get("second_name") or str(pid_),
             "club": teams.get(p.get("team"), ""),
             "pos": POS.get(p.get("element_type"), "?"),
             "owner_entry_id": owner_by_element.get(pid_),
-            "total_points": p.get("total_points", 0) or 0,
+            "total_points": (p.get("total_points", 0) or 0) + prov,
             "avg_points": points_per_game(p),
             "draft_pick": draft_pick_by_element.get(pid_),
             "ever_owned": pid_ in ever_owned,
             # Season totals (FPL's own, live round included) for the
             # Fixtures tab's club squad view.
             **{k: p.get(k, 0) or 0 for k in SEASON_STAT_KEYS},
+            # Season bonus includes this round's provisional bonus (marked
+            # separately so the page can label it as not yet confirmed).
+            "bonus_provisional": prov,
             "form": _num(p.get("form")),
             "status": p.get("status") or "a",
             "news": p.get("news") or "",
@@ -328,13 +393,17 @@ def build(raw=RAW, now=None):
     # the last one played), plus each manager's lineup for it. Unlike
     # "rounds"/records, this isn't finished-only -- the whole point of this
     # tab is the round as it stands right now.
-    ROUND_STAT_KEYS = ("minutes", "goals_scored", "assists", "clean_sheets", "defensive_contribution", "bonus")
+    ROUND_STAT_KEYS = ("minutes", "goals_scored", "assists", "clean_sheets", "defensive_contribution", "bonus", "bps")
     live_cur_full = (_load(raw / "live" / f"gw{cur}.json", {}) or {}) if cur else {}
     live_cur = live_cur_full.get("elements", {}) or {}
 
     def round_stats(el):
         s = (live_cur.get(str(el), {}) or {}).get("stats", {}) or {}
-        return {k: s.get(k, 0) or 0 for k in ROUND_STAT_KEYS}
+        row = {k: s.get(k, 0) or 0 for k in ROUND_STAT_KEYS}
+        prov = prov_bonus.get(el, 0)
+        row["bonus"] += prov
+        row["bonus_provisional"] = prov
+        return row
 
     def round_player(el):
         return {**pinfo(el), "points": pp.get(cur, {}).get(el, 0),
@@ -381,7 +450,8 @@ def build(raw=RAW, now=None):
             "all_players": sorted((round_player(p["id"]) for p in boot.get("elements", [])),
                                    key=lambda r: (-r["points"], r["name"])),
             "matches": _round_matches(live_cur_full, boot, players, owner_by_element,
-                                      _load(raw / "classic_fixtures_current.json", []) or [], classic_teams),
+                                      _load(raw / "classic_fixtures_current.json", []) or [], classic_teams,
+                                      provisional=prov_fx),
         }
 
     # ---- next 5 fixtures per Premier League team (for the Fixtures tab) --
@@ -443,6 +513,15 @@ def build(raw=RAW, now=None):
     # other record, which stay finished-gameweeks-only (see module docstring).
     live_scores = {e: scores[cur].get(e) for e in eids} if (cur and not cur_done) else {}
 
+    # Provisional bonus inside each manager's live starting XI, so the page
+    # can say how much of a live score isn't confirmed yet, and the data
+    # checks can compare with a site total that hasn't added it.
+    prov_xi = {}
+    if live_gw:
+        for e in eids:
+            xi_now = [el for el, by_gw in contrib[e].items() if live_gw in by_gw]
+            prov_xi[e] = sum(prov_bonus.get(el, 0) for el in xi_now)
+
     per_manager = {}
     for e in eids:
         gs = [(gw, scores[gw][e]) for gw in complete]
@@ -456,6 +535,7 @@ def build(raw=RAW, now=None):
         live_pts = live_scores.get(e)
         per_manager[str(e)] = {
             "rounds_played": len(pts),
+            "live_bonus": prov_xi.get(e, 0) if live_pts is not None else 0,
             "total": sum(pts) + (live_pts or 0),
             "live_points": live_pts,
             "average": round(sum(pts) / len(pts), 1) if pts else None,
@@ -584,10 +664,15 @@ def build(raw=RAW, now=None):
         # own live total. That's not a real mismatch: it still agrees once
         # you swap in the site's own (unsubbed) live figure for that round.
         live_unsubbed_total = through_fin + (ev_total or 0) if (cur and not cur_done) else None
+        prov_m = prov_xi.get(m["entry_id"], 0)
         matches = ("through_current" if through_cur == s.get("total")
+                   else "through_current_before_provisional_bonus"
+                   if prov_m and through_cur - prov_m == s.get("total")
                    else "through_finished" if through_fin == s.get("total")
                    else "through_finished_plus_live_unsubbed"
                    if live_unsubbed_total is not None and live_unsubbed_total == s.get("total")
+                   else "through_finished_plus_live_unsubbed"
+                   if live_unsubbed_total is not None and prov_m and live_unsubbed_total + prov_m == s.get("total")
                    else None)
         standing_checks.append({
             "entry_id": m["entry_id"], "site_total": s.get("total"),
@@ -596,6 +681,7 @@ def build(raw=RAW, now=None):
             "matches": matches,
             "site_event_total": ev_total,
             "computed_current_gw": scores[cur].get(m["entry_id"]) if cur else None,
+            "provisional_bonus": prov_m,
         })
     checks = {
         "lineup_vs_official_mismatches": mismatches,
@@ -637,10 +723,10 @@ def build(raw=RAW, now=None):
 
 
 MATCH_STATS = ("goals_scored", "assists", "own_goals", "yellow_cards", "red_cards",
-               "saves", "bonus", "defensive_contribution")
+               "saves", "bonus", "bps", "defensive_contribution")
 
 
-def _round_matches(live, boot, players, owner_by_element, clock_fixtures=(), classic_teams=()):
+def _round_matches(live, boot, players, owner_by_element, clock_fixtures=(), classic_teams=(), provisional=None):
     """Every Premier League match in the live gameweek, livescore-style,
     with each side's players who got minutes in *that* match. Per-match
     stats come from the fixture's own stat lists (goals, cards, bonus,
@@ -650,7 +736,12 @@ def _round_matches(live, boot, players, owner_by_element, clock_fixtures=(), cla
     The draft feed's match clock is always 0, so "minutes" comes from the
     classic feed's copy of the same match (paired by match code, or by
     kick-off time and team names); None when that feed has no clock.
+
+    provisional: {fixture id: {element: bonus}} from _provisional_bonus --
+    added to that match's bonus and points, flagged per player as
+    "bonus_provisional", until FPL confirms the real bonus.
     """
+    provisional = provisional or {}
     teams = {t["id"]: t for t in boot.get("teams", [])}
     classic_short = {t.get("id"): t.get("short_name") for t in classic_teams}
     clock_by_code = {c.get("code"): c.get("minutes") for c in clock_fixtures if c.get("code") is not None}
@@ -682,15 +773,22 @@ def _round_matches(live, boot, players, owner_by_element, clock_fixtures=(), cla
         else:
             status = "upcoming"
 
+        prov = provisional.get(fid) or {}
+
         def side(team_id, score):
             rows = []
             for el, base in (per_fixture.get(fid) or {}).items():
                 if base["minutes"] <= 0 or elem_team.get(el) != team_id:
                     continue
                 info = players.get(el, {})
-                rows.append({"id": el, "name": info.get("name", f"Player {el}"), "pos": info.get("pos", "?"),
-                             "owner_entry_id": owner_by_element.get(el), **base,
-                             **{k: stat_by_el.get(el, {}).get(k, 0) for k in MATCH_STATS}})
+                row = {"id": el, "name": info.get("name", f"Player {el}"), "pos": info.get("pos", "?"),
+                       "owner_entry_id": owner_by_element.get(el), **base,
+                       **{k: stat_by_el.get(el, {}).get(k, 0) for k in MATCH_STATS}}
+                b = prov.get(el, 0)
+                row["bonus"] += b
+                row["points"] += b
+                row["bonus_provisional"] = b
+                rows.append(row)
             rows.sort(key=lambda r: (-r["points"], -r["minutes"], r["name"]))
             t = teams.get(team_id, {})
             return {"short": t.get("short_name", "?"), "name": t.get("name", "?"),
@@ -703,6 +801,7 @@ def _round_matches(live, boot, players, owner_by_element, clock_fixtures=(), cla
             clock = clock_by_kickoff.get((f.get("kickoff_time"), home_short, away_short))
         matches.append({"id": fid, "kickoff": f.get("kickoff_time"), "status": status,
                         "minutes": clock if status == "live" and clock else None,
+                        "bonus_provisional": bool(prov),
                         "home": side(f.get("team_h"), f.get("team_h_score")),
                         "away": side(f.get("team_a"), f.get("team_a_score"))})
     return matches

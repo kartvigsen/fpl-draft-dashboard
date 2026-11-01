@@ -33,7 +33,7 @@ class FrontendMarkupTest(unittest.TestCase):
 
     def test_standings_explains_the_live_score_when_a_round_is_in_progress(self):
         self.assertIn("if (D.live_round) pg.append(", HTML)
-        self.assertIn("`Pts and bench pts include live GW${D.live_round.gw}.`", HTML)
+        self.assertIn("`Pts and bench pts include live GW${D.live_round.gw}, with provisional bonus", HTML)
 
     def test_bench_views_label_the_live_round(self):
         # Points left on the bench, Biggest bench misses and Biggest
@@ -301,10 +301,10 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn(".bonus-box.b2 { background: #2a78d6; }", HTML)
         self.assertIn(".bonus-box.b1 { background: #8b5cf6; }", HTML)
         # On the card corner, next to the pop-up's points, and in the table.
-        self.assertIn('bonusBox(p.bonus, "corner")', HTML)
-        self.assertIn('`${fmt(p.points)} pts`, bonusBox(p.bonus, "lg")', HTML)
-        self.assertIn("bonusBox(p.bonus) || fmt(p.bonus)", HTML)
-        self.assertIn('statRow("Bonus", fmt(p.bonus))', HTML)
+        self.assertIn('bonusBox(p.bonus, "corner", p.bonus_provisional)', HTML)
+        self.assertIn('`${fmt(p.points)} pts`, bonusBox(p.bonus, "lg", p.bonus_provisional)', HTML)
+        self.assertIn('bonusBox(p.bonus, "", p.bonus_provisional) || fmt(p.bonus)', HTML)
+        self.assertIn('statRow("Bonus", bonusText(p))', HTML)
         self.assertIn('{ key: "bonus", label: "Bonus", num: true, get: p => p.bonus }', HTML)
         # The box replaces the old text versions, so bonus isn't shown twice.
         self.assertNotIn("`${p.bonus}B`", HTML)
@@ -324,8 +324,8 @@ class HomeScreenInstallTest(unittest.TestCase):
     def test_tapping_a_match_opens_a_player_overview(self):
         self.assertIn("function openMatch(m)", HTML)
         self.assertIn('modalCard.className = "modal-card wide";', HTML)
-        self.assertIn('["Min", "G", "A", "CS", "DC", "B", "Pts"]', HTML)
-        self.assertIn("bonusBox(p.bonus)", HTML)
+        self.assertIn('["Min", "G", "A", "CS", "DC", "BPS", "B", "Pts"]', HTML)
+        self.assertIn('bonusBox(p.bonus, "", p.bonus_provisional)', HTML)
         self.assertIn('title: `Owned by ${nameOf(byId[p.owner_entry_id])}`', HTML)
         # The player pop-up goes back to its normal width after a match pop-up.
         self.assertIn('function openPlayerModal(p) {\n      modalCard.className = "modal-card";', HTML)
@@ -490,6 +490,36 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertEqual(HTML.count("function makeSortHeader("), 1)
         self.assertIn("makeSortHeader(SCORER_COLS", HTML)
         self.assertIn("makeSortHeader(COLS", HTML)
+
+    def test_provisional_bonus_is_striped_and_explained(self):
+        self.assertIn(".bonus-box.prov {", HTML)
+        self.assertIn('prov ? "prov" : ""', HTML)
+        self.assertIn("provisional, from live BPS", HTML)
+        self.assertIn("prov. bonus", HTML)  # standings live note
+        self.assertIn("through_current_before_provisional_bonus", HTML)
+
+    def test_bps_is_shown_in_live_tables_match_view_and_player_modal(self):
+        self.assertIn('{ key: "bps", label: "BPS", num: true, get: p => p.bps ?? 0 },', HTML)
+        self.assertIn('statRow("BPS", fmt(p.bps))', HTML)
+
+    def test_all_players_has_sortable_season_bps_and_bonus_columns(self):
+        block = HTML[HTML.index("/* all players */"):HTML.index("/* fixtures */")]
+        self.assertIn('{ key: "bps", label: "BPS", num: true', block)
+        self.assertIn('{ key: "bonus", label: "Bonus", num: true', block)
+
+    def test_every_other_table_is_sortable_by_any_column(self):
+        self.assertIn("function autoSortTable(table)", HTML)
+        self.assertIn("new MutationObserver(", HTML)   # modals and switchers too
+        self.assertIn("autoSortAll(document);", HTML)
+        # Tables already sorted on their data (with row limits) are skipped.
+        self.assertIn("""tr.querySelector('th[role="button"]')""", HTML)
+
+    def test_all_moves_and_fixture_columns_sort_on_the_data(self):
+        self.assertIn('makeSortHeader(MOVE_COLS, "time", -1)', HTML)
+        self.assertIn("label: `Fixture ${i + 1}`, num: true, fx: i", HTML)
+
+    def test_records_table_has_a_header_so_it_can_be_sorted(self):
+        self.assertIn('h("th", { class: "l" }, "Record")', HTML)
 
     def test_tab_bar_does_not_rubber_band_when_swiped(self):
         self.assertIn("overscroll-behavior-x: contain;", HTML)
