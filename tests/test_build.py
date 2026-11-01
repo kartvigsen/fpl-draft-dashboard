@@ -1242,3 +1242,97 @@ class FixturesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PlayerHistoryTest(unittest.TestCase):
+    """All players tab: each player's season, match by match."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    @staticmethod
+    def fx(fid, h, a, hs, as_, started=True, finished=True, stats=()):
+        return {"id": fid, "team_h": h, "team_a": a, "team_h_score": hs, "team_a_score": as_,
+                "started": started, "finished": finished, "finished_provisional": finished,
+                "kickoff_time": f"2026-08-{fid:02d}T15:00:00Z", "stats": list(stats)}
+
+    def build(self, provisional=None, cur=2):
+        # GW1: one match each. GW2: team 1 plays twice (a double gameweek),
+        # plus a match that hasn't kicked off.
+        _dump(self.tmp, "live/gw1.json", {
+            "fixtures": [self.fx(1, 1, 2, 2, 1)],
+            "elements": {
+                "10": {"explain": [[[{"stat": "minutes", "value": 90, "points": 2},
+                                     {"stat": "goals_scored", "value": 1, "points": 4}], 1]],
+                       "stats": {"minutes": 90, "goals_scored": 1, "assists": 0, "clean_sheets": 0,
+                                 "defensive_contribution": 7, "bonus": 3, "bps": 40, "total_points": 9}},
+                "20": {"explain": [[[{"stat": "minutes", "value": 0, "points": 0}], 1]],
+                       "stats": {"minutes": 0, "total_points": 0}},
+            }})
+        _dump(self.tmp, "live/gw2.json", {
+            "fixtures": [
+                self.fx(2, 1, 3, 0, 0, stats=[{"s": "defensive_contribution", "h": [{"element": 10, "value": 4}], "a": []},
+                                              {"s": "bps", "h": [{"element": 10, "value": 12}], "a": []}]),
+                self.fx(3, 4, 1, 1, 3, finished=False,
+                        stats=[{"s": "goals_scored", "h": [], "a": [{"element": 10, "value": 2}]},
+                               {"s": "bps", "h": [], "a": [{"element": 10, "value": 50}]}]),
+                self.fx(4, 2, 3, None, None, started=False, finished=False),
+            ],
+            "elements": {
+                "10": {"explain": [
+                    [[{"stat": "minutes", "value": 90, "points": 2}, {"stat": "clean_sheets", "value": 1, "points": 1}], 2],
+                    [[{"stat": "minutes", "value": 30, "points": 1}, {"stat": "goals_scored", "value": 2, "points": 8}], 3]],
+                    "stats": {"minutes": 120, "goals_scored": 2, "total_points": 12}},
+            }})
+        return build_stats._player_history(self.tmp, [1, 2], {1: "AAA", 2: "BBB", 3: "CCC", 4: "DDD"},
+                                           provisional or {}, cur)
+
+    def rows(self, hist, el):
+        F = hist["fields"]
+        return {r[0]: dict(zip(F, r)) for r in hist["rows"].get(str(el), [])}
+
+    def test_started_matches_only_with_scores_and_status(self):
+        hist = self.build()
+        self.assertEqual(set(hist["fixtures"]), {"1", "2", "3"})   # GW2's unstarted match is left out
+        self.assertEqual(hist["fixtures"]["1"], {"gw": 1, "kickoff": "2026-08-01T15:00:00Z", "h": 1, "a": 2,
+                                                 "hs": 2, "as": 1, "status": "ft"})
+        self.assertEqual(hist["fixtures"]["3"]["status"], "live")
+        self.assertEqual(hist["teams"]["4"], "DDD")
+
+    def test_single_match_uses_the_players_gameweek_stats(self):
+        r = self.rows(self.build(), 10)[1]
+        self.assertEqual((r["minutes"], r["goals_scored"], r["assists"], r["clean_sheets"],
+                          r["defensive_contribution"], r["bonus"], r["bps"], r["points"]),
+                         (90, 1, 0, 0, 7, 3, 40, 9))
+
+    def test_double_gameweek_is_split_per_match(self):
+        rows = self.rows(self.build(), 10)
+        self.assertEqual((rows[2]["minutes"], rows[2]["clean_sheets"], rows[2]["defensive_contribution"],
+                          rows[2]["bps"], rows[2]["points"]), (90, 1, 4, 12, 3))
+        self.assertEqual((rows[3]["minutes"], rows[3]["goals_scored"], rows[3]["bps"], rows[3]["points"]),
+                         (30, 2, 50, 9))
+        self.assertEqual(rows[2]["points"] + rows[3]["points"], 12)
+
+    def test_zero_minute_appearances_are_left_out(self):
+        self.assertEqual(self.rows(self.build(), 20), {})
+
+    def test_live_round_provisional_bonus_is_added_to_that_match(self):
+        r = self.rows(self.build(provisional={3: {10: 3}}), 10)[3]
+        self.assertEqual((r["bonus"], r["bonus_provisional"], r["points"]), (3, 3, 12))
+        # Only the gameweek in progress gets it.
+        r = self.rows(self.build(provisional={3: {10: 3}}, cur=5), 10)[3]
+        self.assertEqual((r["bonus"], r["points"]), (0, 9))
+
+    def test_build_exposes_history_and_team_ids(self):
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            write_all_players_fixture(tmp)
+            d = build_stats.build(tmp)
+            self.assertIn("player_history", d)
+            self.assertEqual(d["player_history"]["fields"][0], "fixture")
+            self.assertEqual({p["id"]: p["team_id"] for p in d["all_players"]}[501], 1)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)

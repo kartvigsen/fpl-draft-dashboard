@@ -235,6 +235,24 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn("showZero ? inPos : inPos.filter(p => p.minutes)", panel)
         self.assertIn("with 0 minutes`", panel)
 
+    def test_all_players_name_opens_the_season_match_by_match(self):
+        panel = HTML[HTML.index("pg = panels.allplayers;"):HTML.index("/* fixtures */")]
+        self.assertIn("onclick: () => openPlayerHistory(p)", panel)
+        fn = HTML[HTML.index("function openPlayerHistory(p)"):HTML.index("/* tabs */")]
+        for col in ('"Match"', '"Result"', '"Min"', '"G"', '"A"', '"CS"', '"DC"', '"B"', '"Pts"'):
+            self.assertIn(col, fn)
+        self.assertIn("Didn't play", fn)
+        self.assertIn('gf > ga ? "W" : gf < ga ? "L" : "D"', HTML)
+        self.assertIn("ph-res", fn)
+        # Newest gameweek first.
+        self.assertIn("sort((a, b) => b.f.gw - a.f.gw", HTML)
+        # Native append would print "null" for a missing news line.
+        self.assertNotIn('p.news) : null', fn)
+
+    def test_bonus_box_is_shared_by_every_tab(self):
+        self.assertEqual(HTML.count("const bonusBox = (n, extra"), 1)
+        self.assertLess(HTML.index("const bonusBox = (n, extra"), HTML.index("/* tabs */"))
+
     def test_modal_is_shared_and_lives_outside_the_tab_panels(self):
         # A modal inside a hidden panel can't show, so it's appended to the
         # page itself and reused by the Live round and Fixtures tabs.

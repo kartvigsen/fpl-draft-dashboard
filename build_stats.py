@@ -368,6 +368,7 @@ def build(raw=RAW, now=None):
             "id": pid_,
             "name": p.get("web_name") or p.get("second_name") or str(pid_),
             "club": teams.get(p.get("team"), ""),
+            "team_id": p.get("team"),
             "pos": POS.get(p.get("element_type"), "?"),
             "owner_entry_id": owner_by_element.get(pid_),
             "total_points": (p.get("total_points", 0) or 0) + prov,
@@ -715,11 +716,72 @@ def build(raw=RAW, now=None):
                     "best_rounds": best_rounds[:10],
                     "bench": bench, "missed": missed[:10]},
         "all_players": all_players,
+        "player_history": _player_history(raw, started_gws, teams, prov_fx if (cur and not cur_done) else {}, cur),
         "current_round": current_round,
         "fixtures_by_team": fixtures_by_team,
         "transfer_suggestions": transfer_suggestions,
         "checks": checks,
     }
+
+
+# One row per player per match played (minutes > 0), for the All players
+# tab's season history pop-up: [fixture id, minutes, goals, assists,
+# clean sheets, defensive contributions, bonus, BPS, points, provisional
+# bonus]. Kept as compact lists -- ~300 players play each gameweek.
+HISTORY_FIELDS = ("fixture", "minutes", "goals_scored", "assists", "clean_sheets",
+                  "defensive_contribution", "bonus", "bps", "points", "bonus_provisional")
+
+
+def _player_history(raw, gws, team_short, provisional, cur):
+    """Every started match of the season (score, teams, status) and each
+    player's line for every match they played in. A single-match gameweek
+    uses the player's own gameweek stats; in a double gameweek the stats
+    are split per match from each fixture's stat lists and "explain"
+    (minutes, clean sheet, points). The live gameweek's provisional bonus
+    (see _provisional_bonus) is added to that match's bonus and points."""
+    fixtures, rows = {}, {}
+    per_fx_keys = ("goals_scored", "assists", "defensive_contribution", "bonus", "bps")
+    for gw in gws:
+        live = _load(Path(raw) / "live" / f"gw{gw}.json", {}) or {}
+        fx_stats = {}
+        for f in live.get("fixtures") or []:
+            if not f.get("started"):
+                continue
+            fid = f.get("id")
+            fixtures[str(fid)] = {
+                "gw": gw, "kickoff": f.get("kickoff_time"),
+                "h": f.get("team_h"), "a": f.get("team_a"),
+                "hs": f.get("team_h_score"), "as": f.get("team_a_score"),
+                "status": "ft" if (f.get("finished") or f.get("finished_provisional")) else "live",
+            }
+            for st in f.get("stats") or []:
+                if st.get("s") in per_fx_keys:
+                    for side in ("h", "a"):
+                        for it in st.get(side) or []:
+                            fx_stats.setdefault(fid, {}).setdefault(it.get("element"), {})[st["s"]] = it.get("value", 0) or 0
+        for el, v in (live.get("elements") or {}).items():
+            el = int(el)
+            explain = [(entries, fid) for entries, fid in (v or {}).get("explain") or [] if str(fid) in fixtures]
+            stats = (v or {}).get("stats") or {}
+            for entries, fid in explain:
+                ex = {e.get("stat"): e for e in entries}
+                minutes = (ex.get("minutes") or {}).get("value", 0) or 0
+                if minutes <= 0:
+                    continue
+                if len(explain) == 1:
+                    vals = {k: stats.get(k, 0) or 0 for k in per_fx_keys}
+                    vals["clean_sheets"] = stats.get("clean_sheets", 0) or 0
+                    pts = stats.get("total_points", 0) or 0
+                else:
+                    vals = {k: fx_stats.get(fid, {}).get(el, {}).get(k, 0) for k in per_fx_keys}
+                    vals["clean_sheets"] = (ex.get("clean_sheets") or {}).get("value", 0) or 0
+                    pts = sum(e.get("points", 0) or 0 for e in entries)
+                prov = (provisional.get(fid) or {}).get(el, 0) if gw == cur else 0
+                rows.setdefault(str(el), []).append([
+                    fid, minutes, vals["goals_scored"], vals["assists"], vals["clean_sheets"],
+                    vals["defensive_contribution"], vals["bonus"] + prov, vals["bps"], pts + prov, prov])
+    return {"fields": list(HISTORY_FIELDS), "teams": {str(k): v for k, v in team_short.items()},
+            "fixtures": fixtures, "rows": rows}
 
 
 MATCH_STATS = ("goals_scored", "assists", "own_goals", "yellow_cards", "red_cards",

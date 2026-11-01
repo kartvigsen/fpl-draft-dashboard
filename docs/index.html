@@ -298,6 +298,22 @@ details.info[open] .sub { margin-top: 6px; }
 @media (max-width: 480px) { .modal-card.wide { padding: 14px 12px; } .modal-backdrop { padding: 10px; } .sq-tbl { font-size: 12px; } .sq-tbl th:not(:first-child), .sq-tbl td:not(:first-child) { padding: 6px 2px; } }
 .sq-tbl td.num { font-variant-numeric: tabular-nums; }
 .sq-tbl th:first-child, .sq-tbl td:first-child { position: sticky; left: 0; background: var(--surface); z-index: 1; padding-right: 6px; }
+.ph-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 0 0 6px; }
+.ph-meta .sg-flag { margin-left: 0; }
+.ph-tiles { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin: 8px 0 12px; }
+.ph-tile { background: var(--wash); border-radius: 8px; padding: 6px 2px; text-align: center; }
+.ph-tile b { display: block; font-size: 15px; font-variant-numeric: tabular-nums; }
+.ph-tile span { font-size: 11px; color: var(--ink-2); }
+.ph-tbl .ph-gw { display: block; font-size: 11px; color: var(--ink-2); }
+.ph-tbl .ph-opp { display: block; font-weight: 600; white-space: nowrap; }
+.ph-res { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 6px; font-variant-numeric: tabular-nums; white-space: nowrap; background: var(--wash); }
+.ph-res b { font-weight: 800; }
+.ph-res.w { background: color-mix(in oklab, var(--good) 16%, transparent); color: var(--good); }
+.ph-res.l { background: color-mix(in oklab, var(--bad) 16%, transparent); color: var(--bad); }
+.ph-res.d { color: var(--ink-2); }
+.ph-res.live { background: color-mix(in oklab, var(--good) 16%, transparent); color: var(--good); }
+tr.ph-dnp td { color: var(--muted); }
+.ph-dnp-note { text-align: center; font-style: italic; }
 .tag-free.sm { padding: 0 6px; font-size: 10.5px; line-height: 16px; }
 tr.sq-zero td { color: var(--muted); }
 .mx-nm { font-weight: 600; }
@@ -700,6 +716,78 @@ const modalCard = h("div", { class: "modal-card", role: "dialog", "aria-modal": 
 modalBackdrop.append(modalCard);
 function closeModal() { modalBackdrop.hidden = true; }
 document.addEventListener("keydown", ev => { if (ev.key === "Escape" && !modalBackdrop.hidden) closeModal(); });
+const bonusBox = (n, extra = "", prov = 0) => n > 0
+  ? h("span", { class: `bonus-box b${Math.min(n, 3)} ${prov ? "prov" : ""} ${extra}`.replace(/\s+/g, " ").trim(),
+      title: `${n} bonus point${n === 1 ? "" : "s"}${prov ? (prov === n ? " (provisional, from live BPS)" : ` (${prov} provisional, from live BPS)`) : ""}` }, n)
+  : null;
+
+/* a player's season, match by match (All players tab) */
+const PH = D.player_history || { fields: [], teams: {}, fixtures: {}, rows: {} };
+const HSTATUS = { d: "Doubtful", i: "Injured", s: "Suspended", u: "Unavailable", n: "Unavailable" };
+function playerMatches(p) {
+  const F = PH.fields, idx = k => F.indexOf(k);
+  const played = new Map((PH.rows[p.id] || []).map(r => [String(r[idx("fixture")]),
+    Object.fromEntries(F.map((k, i) => [k, r[i]]))]));
+  const ids = new Set(played.keys());
+  for (const [fid, f] of Object.entries(PH.fixtures)) if (f.h === p.team_id || f.a === p.team_id) ids.add(fid);
+  return [...ids].map(fid => {
+    const f = PH.fixtures[fid];
+    if (!f) return null;
+    // Side from the player's current club; a match from before a move to
+    // another club still shows, just without a win/draw/loss mark.
+    const home = f.h === p.team_id ? true : f.a === p.team_id ? false : null;
+    const opp = home === null ? `${PH.teams[f.h] || "?"} v ${PH.teams[f.a] || "?"}` : PH.teams[home ? f.a : f.h] || "?";
+    const gf = home === false ? f.as : f.hs, ga = home === false ? f.hs : f.as;
+    const res = home === null || gf == null || ga == null ? null : gf > ga ? "W" : gf < ga ? "L" : "D";
+    return { fid, f, home, opp, gf, ga, res, s: played.get(fid) || null };
+  }).filter(Boolean).sort((a, b) => b.f.gw - a.f.gw || String(b.f.kickoff).localeCompare(String(a.f.kickoff)));
+}
+function openPlayerHistory(p) {
+  const rows = playerMatches(p);
+  const blank = v => (v ? fmt(v) : "");
+  const resCell = m => {
+    const score = m.gf == null ? "" : `${m.gf}–${m.ga}`;
+    const label = m.f.status === "live" ? "Live" : m.res || "";
+    return h("td", { class: "num", "data-sort": m.res === "W" ? 3 : m.res === "D" ? 1 : m.res === "L" ? 0 : "" },
+      h("span", { class: `ph-res ${m.f.status === "live" ? "live" : (m.res || "").toLowerCase()}`,
+        title: m.f.status === "live" ? "Match in progress" : { W: "Win", D: "Draw", L: "Loss" }[m.res] || "" },
+        label ? h("b", {}, label) : null, score));
+  };
+  const body = rows.map(m => {
+    const s = m.s;
+    const tr = h("tr", { class: s ? "" : "ph-dnp" },
+      h("td", { class: "l", "data-sort": m.f.gw }, h("span", { class: "ph-gw" }, `GW${m.f.gw}`),
+        h("span", { class: "ph-opp" }, m.home === null ? m.opp : `${m.opp} (${m.home ? "H" : "A"})`)),
+      resCell(m));
+    if (!s) tr.append(h("td", { class: "num ph-dnp-note", colspan: "7" }, "Didn't play"));
+    else tr.append(
+      h("td", { class: "num" }, fmt(s.minutes)), h("td", { class: "num" }, blank(s.goals_scored)),
+      h("td", { class: "num" }, blank(s.assists)), h("td", { class: "num", "data-sort": s.clean_sheets }, s.clean_sheets ? "✓" : ""),
+      h("td", { class: "num" }, blank(s.defensive_contribution)),
+      h("td", { class: "num", "data-sort": s.bonus }, bonusBox(s.bonus, "", s.bonus_provisional)),
+      h("td", { class: "num win" }, fmt(s.points)));
+    return tr;
+  });
+  const tile = (label, v) => h("div", { class: "ph-tile" }, h("b", {}, v), h("span", {}, label));
+  const owner = p.owner_entry_id != null ? h("span", { class: "mx-who" }, dot(byId[p.owner_entry_id]), nameOf(byId[p.owner_entry_id]))
+    : h("span", { class: "tag-free sm" }, "Free agent");
+  modalCard.className = "modal-card wide";
+  modalCard.textContent = "";
+  modalCard.append(
+    h("button", { type: "button", class: "ghost", style: "float:right", onclick: closeModal }, "Close"),
+    h("h3", { class: "mx-title" }, p.name),
+    h("p", { class: "sub ph-meta" }, `${p.club} · ${p.pos} · `, owner,
+      HSTATUS[p.status] ? h("span", { class: `sg-flag ${p.status === "d" ? "warn" : "bad"}`, title: p.news || HSTATUS[p.status] },
+        p.status === "d" && p.chance != null ? `${p.chance}%` : HSTATUS[p.status]) : null),
+    p.news ? h("p", { class: "sub", style: "margin-top:0" }, p.news) : "",
+    h("div", { class: "ph-tiles" }, tile("Pts", fmt(p.total_points)), tile("Min", fmt(p.minutes)), tile("G", fmt(p.goals_scored)),
+      tile("A", fmt(p.assists)), tile("CS", fmt(p.clean_sheets)), tile("DC", fmt(p.defensive_contribution)), tile("B", fmt(p.bonus))),
+    rows.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "mx-tbl sq-tbl ph-tbl" },
+      h("thead", {}, h("tr", {}, ["Match", "Result", "Min", "G", "A", "CS", "DC", "B", "Pts"].map((x, i) => h("th", { class: i ? "" : "l" }, x)))),
+      h("tbody", {}, body))) : emptyMsg("No matches played yet this season."),
+    h("p", { class: "sub mx-legend" }, "Newest first. W win · D draw · L loss · G goals · A assists · CS clean sheet · DC defensive contributions · B bonus."));
+  modalBackdrop.hidden = false;
+}
 
 /* tabs */
 const TABS = [["overview", "Overview"], ["liveround", "Live round"], ["rounds", "Rounds"], ["players", "Team info"], ["transactions", "Transactions"], ["fixtures", "Fixtures"], ["allplayers", "All players"]];
@@ -1113,10 +1201,6 @@ pg = panels.liveround;
     const POS_ORDER = ["GKP", "DEF", "MID", "FWD"];
     // 3 green, 2 blue, 1 purple; a double gameweek can exceed 3, shown as green.
     // Striped = provisional: from live BPS (top 3 in a match), not yet confirmed by FPL.
-    const bonusBox = (n, extra = "", prov = 0) => n > 0
-      ? h("span", { class: `bonus-box b${Math.min(n, 3)} ${prov ? "prov" : ""} ${extra}`.replace(/\s+/g, " ").trim(),
-          title: `${n} bonus point${n === 1 ? "" : "s"}${prov ? (prov === n ? " (provisional, from live BPS)" : ` (${prov} provisional, from live BPS)`) : ""}` }, n)
-      : null;
     const bonusText = p => p.bonus_provisional ? `${fmt(p.bonus)} (${p.bonus_provisional === p.bonus ? "" : `${p.bonus_provisional} `}provisional)` : fmt(p.bonus);
     const statLine = p => {
       const parts = [];
@@ -1389,7 +1473,9 @@ pg = panels.allplayers;
 
   function row(p) {
     return h("tr", {},
-      h("td", { class: "l" }, p.name), h("td", { class: "l" }, p.club), h("td", { class: "l" }, p.pos),
+      h("td", { class: "l" }, h("button", { type: "button", class: "club-btn", onclick: () => openPlayerHistory(p),
+        "aria-label": `${p.name}: show season match by match` }, p.name, h("span", { class: "chev", "aria-hidden": "true" }, "›"))),
+      h("td", { class: "l" }, p.club), h("td", { class: "l" }, p.pos),
       h("td", { class: "num" }, p.draft_pick == null ? "–" : `Pick ${p.draft_pick}`),
       h("td", { class: "l" }, p.owner_entry_id == null ? h("span", { class: "tag-free" }, "Free agent") : ownerOf(p)),
       h("td", { class: "num" }, fmt(p.total_points)), h("td", { class: "num" }, p.avg_points.toFixed(1)),
