@@ -235,6 +235,48 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn("showZero ? inPos : inPos.filter(p => p.minutes)", panel)
         self.assertIn("with 0 minutes`", panel)
 
+    def test_all_players_name_opens_the_season_match_by_match(self):
+        panel = HTML[HTML.index("pg = panels.allplayers;"):HTML.index("/* fixtures */")]
+        self.assertIn("onclick: () => openPlayerHistory(p)", panel)
+        fn = HTML[HTML.index("function openPlayerHistory(pOrId)"):HTML.index("/* tabs */")]
+        for col in ('"Match"', '"Result"', '"Min"', '"G"', '"A"', '"CS"', '"DC"', '"B"', '"Pts"'):
+            self.assertIn(col, fn)
+        self.assertIn("Didn't play", fn)
+        self.assertIn('gf > ga ? "W" : gf < ga ? "L" : "D"', HTML)
+        self.assertIn("ph-res", fn)
+        # Newest gameweek first.
+        self.assertIn("sort((a, b) => b.f.gw - a.f.gw", HTML)
+        # Native append would print "null" for a missing news line.
+        self.assertNotIn('p.news) : null', fn)
+
+    def test_keepers_get_saves_instead_of_defcon(self):
+        fn = HTML[HTML.index("function openPlayerHistory(pOrId)"):HTML.index("/* tabs */")]
+        self.assertIn('const gk = p.pos === "GKP";', fn)
+        self.assertIn('gk ? "Sv" : "DC"', fn)
+        self.assertIn("blank(gk ? s.saves : s.defensive_contribution)", fn)
+        self.assertIn('gk ? tile("Saves", fmt(p.saves))', fn)
+
+    def test_player_names_everywhere_open_the_season_history(self):
+        self.assertIn("function playerLink(p, label = p.name)", HTML)
+        # transfer suggestions, moves in/out, scorers, bench misses, best
+        # rounds, match pop-up, live round table, club squad
+        self.assertGreaterEqual(HTML.count("playerLink("), 10)
+        for snippet in ('h("b", {}, playerLink(p))', "playerLink(x.in)", "playerLink(x.out)",
+                        'h("span", { class: "mx-nm" }, playerLink(p))', 'h("span", { class: "sq-nm" }, playerLink(p))'):
+            self.assertIn(snippet, HTML)
+        # A lineup chip's round pop-up links on to the season.
+        self.assertIn('"Season match by match ›"', HTML)
+
+    def test_history_opened_from_another_popup_can_go_back(self):
+        fn = HTML[HTML.index("function openPlayerHistory(pOrId)"):HTML.index("/* tabs */")]
+        self.assertIn("const prev = modalBackdrop.hidden ? null : { nodes: [...modalCard.childNodes], cls: modalCard.className };", fn)
+        self.assertIn('"‹ Back"', fn)
+        self.assertIn("modalCard.replaceChildren(...prev.nodes)", fn)
+
+    def test_bonus_box_is_shared_by_every_tab(self):
+        self.assertEqual(HTML.count("const bonusBox = (n, extra"), 1)
+        self.assertLess(HTML.index("const bonusBox = (n, extra"), HTML.index("/* tabs */"))
+
     def test_modal_is_shared_and_lives_outside_the_tab_panels(self):
         # A modal inside a hidden panel can't show, so it's appended to the
         # page itself and reused by the Live round and Fixtures tabs.

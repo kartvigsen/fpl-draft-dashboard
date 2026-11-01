@@ -117,6 +117,10 @@ Click a manager's name to switch to their table of every player who scored a pos
 
 ## All players tab
 
+**Tap a player's name** (marked ›) to see their season match by match, newest first: gameweek, opponent (H/A), the result from their club's point of view (W/D/L with the score; "Live" for a match in progress), minutes, goals, assists, clean sheet, defensive contributions (DEFCON), bonus and points. Matches they didn't get on the pitch for show "Didn't play". Season totals sit at the top, with the owner (or "Free agent") and any injury news. Per-match figures come from each gameweek's live data, so they add up to FPL's season total; a double gameweek is split into its two matches. Goalkeepers get a Saves column in place of DEFCON (keepers don't earn defensive-contribution points).
+
+The same pop-up opens from any player name with a dotted underline, anywhere on the site: the Live round tables and match pop-ups, Team info, Transactions (moves and suggestions) and the Fixtures club squads. On the Live round pitch, tap a player and then "Season match by match ›". Opened from inside another pop-up, it has a "‹ Back" button that returns to where you were.
+
 **Squad by overall rank bracket** is a pivot table above the main list: how many players on each manager's current squad (15 players, including the bench) rank in each bracket of the *entire* Premier League player pool, sorted by season total points (1st–10th highest scorer, 11th–20th, ... down to the bottom of the list). Darker cells mean more players. A bracket like "1–10" is the 10 highest scorers across all players, not players who scored 1 to 10 points — sort the table below by Total points to see the full ranking and check who's in which bracket.
 
 Every Premier League player, not just the ones on a roster in this league — filter by owner (including "Free agent"), position or club, or search by name, and click a column header to sort (click again to reverse). Columns:
