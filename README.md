@@ -50,7 +50,11 @@ Otherwise the run stops after a few seconds. It also rebuilds whenever `docs/ind
 
 ### Reliable match-day updates (external scheduler)
 
-A free scheduler outside GitHub asks GitHub to start the workflow every 10 minutes, with `check` set to `true`. GitHub starts requested runs straight away, and each one goes through the same `should_update.py` check as the built-in timer: a real update while a match is on or just finished, otherwise a quick skip. GitHub's own timer stays as a fallback. One-time setup:
+A free scheduler outside GitHub asks GitHub to start the workflow every 10 minutes, with `check` set to `true`. GitHub starts requested runs straight away, and each one goes through the same `should_update.py` check as the built-in timer: a real update while a match is on or just finished, otherwise a quick skip. GitHub's own timer stays as a fallback.
+
+When both fire at once, two runs can download the same data. Each run starts from the newest saved version, and if another run saved first, the push is refused. The run then fetches the newest version, downloads and rebuilds again, and saves on top, up to three tries. It never tries to merge two copies of the generated files, which is what caused a failed run and email on 1 Nov 2026.
+
+One-time setup:
 
 1. **Create a token that can only start this repo's workflows.** In GitHub: Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token.
    - Repository access: *Only select repositories* → `fpl-draft-dashboard`.
