@@ -301,6 +301,8 @@ details.info[open] .sub { margin-top: 6px; }
 .owner-role { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .role-tag { display: inline-block; padding: 0 7px; border-radius: 999px; font-size: 11px; font-weight: 650; line-height: 18px; white-space: nowrap; }
 .role-tag.role-pitch { background: color-mix(in oklab, var(--good) 16%, var(--surface)); color: var(--good); }
+.mx-bench { display: block; margin: 2px 0 0 14px; line-height: 1; }
+.mx-bench .role-tag { font-size: 10px; line-height: 15px; padding: 0 6px; }
 .role-tag.role-bench { background: var(--wash); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--border); }
 td.win.bench-pts { color: var(--muted); font-weight: 400; }
 .pl-link { all: unset; cursor: pointer; text-decoration: underline dotted; text-decoration-color: var(--muted); text-underline-offset: 3px; }
@@ -1223,6 +1225,14 @@ pg = panels.liveround;
   if (!CR) {
     pg.append(emptyMsg("Appears once the first gameweek has started."));
   } else {
+    // Whether an owned player's points count this round: in the manager's
+    // XI after automatic substitutions ("On pitch"), or on the bench.
+    const roleById = {};
+    for (const t of CR.teams) {
+      for (const x of t.xi) roleById[x.id] = "pitch";
+      for (const x of t.bench) roleById[x.id] = "bench";
+    }
+    const roleOf = p => (p.owner_entry_id == null ? null : roleById[p.id] || null);
 
     const POS_ORDER = ["GKP", "DEF", "MID", "FWD"];
     // 3 green, 2 blue, 1 purple; a double gameweek can exceed 3, shown as green.
@@ -1343,7 +1353,10 @@ pg = panels.liveround;
             h("span", { class: "mx-pos" }, p.pos),
             p.yellow_cards ? h("span", { class: "mx-card y", title: "Yellow card" }) : null,
             p.red_cards ? h("span", { class: "mx-card r", title: "Red card" }) : null,
-            p.own_goals ? h("span", { class: "mx-og", title: "Own goal" }, "OG") : null)),
+            p.own_goals ? h("span", { class: "mx-og", title: "Own goal" }, "OG") : null),
+            // On a manager's bench: a small second line, so the table keeps its width on phones.
+            roleOf(p) === "bench" ? h("span", { class: "mx-bench" }, h("span", { class: "role-tag role-bench",
+              title: `On ${nameOf(byId[p.owner_entry_id])}'s bench: these points don't count` }, "Bench")) : null),
           h("td", { class: "num" }, p.minutes), h("td", { class: "num", "data-sort": p.goals_scored }, blank(p.goals_scored)),
           h("td", { class: "num", "data-sort": p.assists }, blank(p.assists)), h("td", { class: "num", "data-sort": p.clean_sheets }, p.clean_sheets ? "✓" : ""),
           h("td", { class: "num", "data-sort": p.defensive_contribution }, blank(p.defensive_contribution)),
@@ -1394,14 +1407,6 @@ pg = panels.liveround;
     const positions = ["GKP", "DEF", "MID", "FWD"];
     const applyFilters = () => { showAll = false; render(); };
     const ownerOf = p => p.owner_entry_id == null ? "Free agent" : nameOf(byId[p.owner_entry_id]);
-    // Whether an owned player's points count this round: in the manager's
-    // XI after automatic substitutions ("On pitch"), or on the bench.
-    const roleById = {};
-    for (const t of CR.teams) {
-      for (const x of t.xi) roleById[x.id] = "pitch";
-      for (const x of t.bench) roleById[x.id] = "bench";
-    }
-    const roleOf = p => (p.owner_entry_id == null ? null : roleById[p.id] || null);
     const roleTag = p => {
       const r = roleOf(p);
       return r ? h("span", { class: `role-tag role-${r}`, title: r === "pitch"

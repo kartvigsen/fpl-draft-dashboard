@@ -418,6 +418,11 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn('h("option", { value: "bench" }, "Bench only")', HTML)
         self.assertIn("if (role && roleOf(p) !== role) return false;", HTML)
 
+    def test_match_popup_marks_bench_players_on_a_second_line(self):
+        self.assertIn('roleOf(p) === "bench" ? h("span", { class: "mx-bench" }', HTML)
+        # Defined before the match pop-up code that uses it.
+        self.assertLess(HTML.index("const roleById = {};"), HTML.index("const sideTable ="))
+
     def test_live_round_tab_table_shows_top_20_with_a_show_all_toggle(self):
         self.assertIn("const LIM = 20;", HTML)
         self.assertIn("showAll = !showAll; render();", HTML)
