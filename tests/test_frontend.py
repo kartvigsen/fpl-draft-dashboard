@@ -402,7 +402,21 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn('"aria-label": "Filter by position"', HTML)
 
     def test_live_round_tab_table_is_also_filterable_by_owner(self):
-        self.assertIn('h("div", { class: "filters" }, ownerSel, clubSel, posSel)', HTML)
+        self.assertIn('h("div", { class: "filters" }, ownerSel, roleSel, clubSel, posSel)', HTML)
+
+    def test_live_round_table_shows_whether_an_owned_player_is_on_the_pitch_or_bench(self):
+        # From the managers' lineups after automatic substitutions.
+        self.assertIn('for (const x of t.xi) roleById[x.id] = "pitch";', HTML)
+        self.assertIn('for (const x of t.bench) roleById[x.id] = "bench";', HTML)
+        self.assertIn('r === "pitch" ? "On pitch" : "Bench"', HTML)
+        # Free agents get no tag; bench points are muted, not hidden.
+        self.assertIn("p.owner_entry_id == null ? null : roleById[p.id] || null", HTML)
+        self.assertIn('bench ? "num win bench-pts" : "num win"', HTML)
+        # The tag sits next to the player's name, so it stays visible on a
+        # phone where the table scrolls sideways.
+        self.assertIn('h("span", { class: "owner-role" }, playerLink(p), roleTag(p))', HTML)
+        self.assertIn('h("option", { value: "bench" }, "Bench only")', HTML)
+        self.assertIn("if (role && roleOf(p) !== role) return false;", HTML)
 
     def test_live_round_tab_table_shows_top_20_with_a_show_all_toggle(self):
         self.assertIn("const LIM = 20;", HTML)
