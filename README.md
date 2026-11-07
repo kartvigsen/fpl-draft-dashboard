@@ -111,6 +111,9 @@ Each match pop-up also shows every player's **BPS** for that match, and the bonu
 
 Below that, every Premier League player's points and extra stats (minutes, goals, assists, clean sheets, defensive contribution, BPS, bonus) for the round, highest first — filter by owner (including "Free agent"), club or position, or click a column to sort. Shows the top 20 by default; "Show all" expands to every player, and changing a filter collapses it back to 20.
 
+An owned player has an **On pitch** or **Bench** label next to their name, from the manager's lineup after automatic substitutions. A bench player's points are greyed out, since they don't count towards the manager's score. Free agents have no label. A "Pitch and bench" filter narrows the table to either group.
+In a match pop-up, an owned player who is on their manager's bench gets a small **Bench** label under their name.
+
 This updates whenever `update.py` runs (a few times a day on the included schedule), not in real time.
 
 ## Team info tab
