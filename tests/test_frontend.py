@@ -305,11 +305,24 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn('ev.key === "Escape"', HTML)
 
     def test_live_round_highlights_players_who_have_played(self):
-        self.assertIn('class: p.minutes > 0 ? "player-chip played" : "player-chip"', HTML)
-        # On a green pitch, a green "played" tint is hard to see, so the
-        # players who haven't played are faded instead.
-        self.assertIn(".player-chip:not(.played) { opacity: .5; box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); }", HTML)
+        self.assertIn('class: `player-chip ${st}${p.minutes > 0 ? " played" : ""}`', HTML)
+        # On a green pitch, a green "played" tint is hard to see, so players
+        # still to play are faded; started players stay plain white.
+        self.assertIn(".player-chip.pending { opacity: .5; box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); }", HTML)
         self.assertNotIn(".player-chip.played {", HTML)
+        self.assertNotIn(".player-chip.started {", HTML)
+
+    def test_pitch_marks_real_subs_yellow_and_did_not_play_red(self):
+        # Came on from the real bench: played, but didn't start. Didn't play:
+        # 0 minutes once the match is over. Live with 0 minutes stays faded
+        # (FPL doesn't say whether he's on the bench or not in the squad).
+        self.assertIn('p.minutes > 0 ? (p.starts === 0 ? "subbed" : "started")', HTML)
+        self.assertIn(': p.match === "over" ? "dnp" : "pending";', HTML)
+        self.assertIn(".player-chip.subbed { background: #fff3c4;", HTML)
+        self.assertIn(".player-chip.dnp { background: #fbd9d6;", HTML)
+        # Never colour alone: the stat line says it, and a legend explains.
+        self.assertIn('st === "dnp" ? "Didn\'t play" : st === "subbed" ? `Sub · ${statLine(p)}`', HTML)
+        self.assertIn('["subbed", "Came on as sub"], ["dnp", "Didn\'t play"]', HTML)
 
     def test_live_round_pitch_has_score_and_played_count_corner_boxes(self):
         self.assertIn('class: "pitch-box l", title: "Round score"', HTML)

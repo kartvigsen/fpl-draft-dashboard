@@ -1343,3 +1343,45 @@ class PlayerHistoryTest(unittest.TestCase):
             self.assertEqual({p["id"]: p["team_id"] for p in d["all_players"]}[501], 1)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+
+class PitchMatchStateTest(unittest.TestCase):
+    """Live round pitch colours: each player's real-match state ("over",
+    "live", "upcoming") and whether they started it."""
+
+    def build(self):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: shutil.rmtree(tmp, ignore_errors=True))
+        write_auto_sub_fixture(tmp)
+        boot_path = tmp / "bootstrap.json"
+        boot = json.loads(boot_path.read_text())
+        team_of = {3: 2, 5: 5}          # 3 plays a match not yet started, 5 one in progress
+        for el in boot["elements"]:
+            el["team"] = team_of.get(el["id"], 1)
+        boot["teams"] += [{"id": t, "short_name": f"T{t}"} for t in (2, 3, 4, 5, 6)]
+        boot_path.write_text(json.dumps(boot))
+        live_path = tmp / "live" / "gw1.json"
+        live = json.loads(live_path.read_text())
+        live["elements"]["2"]["stats"]["starts"] = 0      # 90 minutes... off the bench in this fixture
+        live["elements"]["2"]["stats"]["minutes"] = 20
+        live["elements"]["5"]["stats"]["starts"] = 1
+        live["fixtures"] = [
+            {"team_h": 1, "team_a": 4, "started": True, "finished": False, "finished_provisional": True},
+            {"team_h": 2, "team_a": 3, "started": False, "finished": False, "finished_provisional": False},
+            {"team_h": 5, "team_a": 6, "started": True, "finished": False, "finished_provisional": False},
+        ]
+        live_path.write_text(json.dumps(live))
+        d = build_stats.build(tmp)
+        return {p["id"]: p for t in d["current_round"]["teams"] for p in t["xi"] + t["bench"]}
+
+    def test_match_state_per_player(self):
+        players = self.build()
+        self.assertEqual(players[1]["match"], "over")       # team 1: finished_provisional
+        self.assertEqual(players[3]["match"], "upcoming")   # team 2: not kicked off
+        self.assertEqual(players[5]["match"], "live")       # team 5: in progress
+
+    def test_starts_comes_from_the_live_feed(self):
+        players = self.build()
+        self.assertEqual((players[2]["minutes"], players[2]["starts"]), (20, 0))   # came on from the bench
+        self.assertEqual(players[5]["starts"], 1)
+        self.assertEqual(players[4]["starts"], 0)                                  # missing -> 0
