@@ -320,8 +320,10 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn(': p.match === "over" ? "dnp" : "pending";', HTML)
         self.assertIn(".player-chip.subbed { background: #fff3c4;", HTML)
         self.assertIn(".player-chip.dnp { background: #fbd9d6;", HTML)
-        # Never colour alone: the stat line says it, and a legend explains.
-        self.assertIn('st === "dnp" ? "Didn\'t play" : st === "subbed" ? `Sub · ${statLine(p)}`', HTML)
+        # A sub's stat line says "Sub"; a red card speaks for itself (no
+        # "Didn't play" text on the card), and the legend explains both.
+        self.assertIn('st === "subbed" ? `Sub · ${statLine(p)}` : statLine(p)', HTML)
+        self.assertNotIn('st === "dnp" ? "Didn\'t play"', HTML)
         self.assertIn('["subbed", "Came on as sub"], ["dnp", "Didn\'t play"]', HTML)
 
     def test_live_round_pitch_has_score_and_played_count_corner_boxes(self):

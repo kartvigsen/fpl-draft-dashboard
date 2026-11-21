@@ -217,7 +217,6 @@ details.info[open] .sub { margin-top: 6px; }
 /* came on from the real bench / didn't play: tinted chip + a coloured top edge, and the stat line says it in words */
 .player-chip.subbed { background: #fff3c4; box-shadow: inset 0 3px 0 #e8b100, 0 2px 6px rgba(0,0,0,.25); }
 .player-chip.dnp { background: #fbd9d6; box-shadow: inset 0 3px 0 #d43c3c, 0 2px 6px rgba(0,0,0,.25); }
-.player-chip.dnp .st { color: #a8261f; font-weight: 700; }
 .player-chip.subbed .st { color: #6e5300; }
 .chip-legend { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 0; margin: 12px 0 0; font-size: 12px; color: var(--ink-2); }
 .chip-legend li { display: inline-flex; align-items: center; gap: 6px; }
@@ -1294,7 +1293,7 @@ pg = panels.liveround;
         bonusBox(p.bonus, "corner", p.bonus_provisional),
         h("div", { class: "nm" }, p.name), h("div", { class: "cl" }, p.team),
         h("div", { class: "pt" }, fmt(p.points)),
-        h("div", { class: "st" }, st === "dnp" ? "Didn't play" : st === "subbed" ? `Sub · ${statLine(p)}` : statLine(p)));
+        h("div", { class: "st" }, st === "subbed" ? `Sub · ${statLine(p)}` : statLine(p)));
     };
     const chipLegend = () => h("ul", { class: "chip-legend", "aria-label": "Player colours" },
       [["started", "Started"], ["subbed", "Came on as sub"], ["dnp", "Didn't play"], ["pending", "Yet to play"]]
