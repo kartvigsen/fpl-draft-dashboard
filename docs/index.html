@@ -1284,6 +1284,20 @@ pg = panels.liveround;
       : p.match === "over" ? "dnp" : "pending";
     const CHIP_TITLE = { started: "Started the match", subbed: "Came on from the bench",
       dnp: "Didn't play: 0 minutes and the match is over", pending: "Yet to play: the match hasn't started, or he hasn't come on yet" };
+    // The minute a substitute came on, livescore style. FPL doesn't publish
+    // substitution times, so it's worked out from his minutes: 90 minus them
+    // once the match is over, the match clock minus them while it's live
+    // (stoppage time can make it a minute or two off).
+    const subOnMinute = p => {
+      const m = (CR.matches || []).find(x => x.status !== "upcoming" && (x.home.short === p.team || x.away.short === p.team));
+      const clock = !m ? null : m.status === "ft" ? 90 : m.minutes;
+      return clock > 0 ? Math.min(clock, Math.max(1, clock - p.minutes)) : null;
+    };
+    const subLine = p => {
+      const on = subOnMinute(p);
+      const rest = statLine({ ...p, minutes: 0 });
+      return [on ? `↑ ${on}'` : "↑ Sub", rest === "–" ? null : rest].filter(Boolean).join(" · ");
+    };
     const chip = p => {
       const st = chipState(p);
       return h("button", { type: "button", class: `player-chip ${st}${p.minutes > 0 ? " played" : ""}`,
@@ -1293,7 +1307,7 @@ pg = panels.liveround;
         bonusBox(p.bonus, "corner", p.bonus_provisional),
         h("div", { class: "nm" }, p.name), h("div", { class: "cl" }, p.team),
         h("div", { class: "pt" }, fmt(p.points)),
-        h("div", { class: "st" }, st === "subbed" ? `Sub · ${statLine(p)}` : statLine(p)));
+        h("div", { class: "st" }, st === "subbed" ? subLine(p) : statLine(p)));
     };
     const chipLegend = () => h("ul", { class: "chip-legend", "aria-label": "Player colours" },
       [["started", "Started"], ["subbed", "Came on as sub"], ["dnp", "Didn't play"], ["pending", "Yet to play"]]

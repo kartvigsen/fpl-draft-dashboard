@@ -322,7 +322,11 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn(".player-chip.dnp { background: #fbd9d6;", HTML)
         # A sub's stat line says "Sub"; a red card speaks for itself (no
         # "Didn't play" text on the card), and the legend explains both.
-        self.assertIn('st === "subbed" ? `Sub · ${statLine(p)}` : statLine(p)', HTML)
+        self.assertIn('st === "subbed" ? subLine(p) : statLine(p)', HTML)
+        # A sub shows the minute he came on (↑ 70'), not how long he played.
+        self.assertIn('const clock = !m ? null : m.status === "ft" ? 90 : m.minutes;', HTML)
+        self.assertIn("Math.min(clock, Math.max(1, clock - p.minutes))", HTML)
+        self.assertIn("on ? `↑ ${on}'` : \"↑ Sub\"", HTML)
         self.assertNotIn('st === "dnp" ? "Didn\'t play"', HTML)
         self.assertIn('["subbed", "Came on as sub"], ["dnp", "Didn\'t play"]', HTML)
 
