@@ -394,7 +394,7 @@ def build(raw=RAW, now=None):
     # the last one played), plus each manager's lineup for it. Unlike
     # "rounds"/records, this isn't finished-only -- the whole point of this
     # tab is the round as it stands right now.
-    ROUND_STAT_KEYS = ("minutes", "goals_scored", "assists", "clean_sheets", "defensive_contribution", "bonus", "bps")
+    ROUND_STAT_KEYS = ("minutes", "starts", "goals_scored", "assists", "clean_sheets", "defensive_contribution", "bonus", "bps")
     live_cur_full = (_load(raw / "live" / f"gw{cur}.json", {}) or {}) if cur else {}
     live_cur = live_cur_full.get("elements", {}) or {}
 
@@ -406,9 +406,21 @@ def build(raw=RAW, now=None):
         row["bonus_provisional"] = prov
         return row
 
+    def match_state(el):
+        """Where the player's own match stands this gameweek: "over" (all
+        of their team's matches finished, or none at all -- a blank),
+        "live" (one has kicked off) or "upcoming". Lets the pitch tell a
+        player who didn't play (0 minutes, match over) from one who may
+        still come on."""
+        if match_over(cur, el):
+            return "over"
+        fx = (team_fx.get(cur) or {}).get(elem_team.get(el), [])
+        return "live" if any(f.get("started") for f in fx) else "upcoming"
+
     def round_player(el):
         return {**pinfo(el), "points": pp.get(cur, {}).get(el, 0),
-                "owner_entry_id": owner_by_element.get(el), **round_stats(el)}
+                "owner_entry_id": owner_by_element.get(el), **round_stats(el),
+                "match": match_state(el)}
 
     current_round = None
     if cur:

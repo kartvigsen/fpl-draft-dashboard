@@ -111,6 +111,8 @@ Each match pop-up also shows every player's **BPS** for that match, and the bonu
 
 Below that, every Premier League player's points and extra stats (minutes, goals, assists, clean sheets, defensive contribution, BPS, bonus) for the round, highest first — filter by owner (including "Free agent"), club or position, or click a column to sort. Shows the top 20 by default; "Show all" expands to every player, and changing a filter collapses it back to 20.
 
+On the pitch and bench, each player card shows how their real match went: **white** started it, **yellow** came on as a substitute (with the minute he came on, e.g. "↑ 70'", worked out from his minutes since FPL doesn't publish substitution times, so stoppage time can make it a minute or two off), **red** didn't play (0 minutes and their match is over), and **faded** still to play (the match hasn't started, or it's on and he hasn't come on yet; FPL doesn't say who is on the real bench). A small legend sits under the bench.
+
 An owned player has an **On pitch** or **Bench** label next to their name, from the manager's lineup after automatic substitutions. A bench player's points are greyed out, since they don't count towards the manager's score. Free agents have no label. A "Pitch and bench" filter narrows the table to either group.
 In a match pop-up, an owned player who is on their manager's bench gets a small **Bench** label under their name.
 
