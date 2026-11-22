@@ -305,12 +305,24 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn('ev.key === "Escape"', HTML)
 
     def test_live_round_highlights_players_who_have_played(self):
-        self.assertIn('class: `player-chip ${st}${p.minutes > 0 ? " played" : ""}`', HTML)
+        self.assertIn('class: `player-chip ${st}${p.minutes > 0 ? " played" : ""}', HTML)
         # On a green pitch, a green "played" tint is hard to see, so players
         # still to play are faded; started players stay plain white.
         self.assertIn(".player-chip.pending { opacity: .5; box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); }", HTML)
         self.assertNotIn(".player-chip.played {", HTML)
         self.assertNotIn(".player-chip.started {", HTML)
+
+    def test_pitch_tags_players_whose_match_is_live(self):
+        self.assertIn('if (p.match !== "live") return null;', HTML)
+        self.assertIn('h("i", { class: "live-dot" }), "LIVE")', HTML)
+        self.assertIn(".live-badge { position: absolute; top: -9px; right: -6px;", HTML)
+        # Clear of a captain/vice badge in the same corner; named in the legend.
+        self.assertIn('p.is_captain || p.is_vice_captain ? " beside-cap" : ""', HTML)
+        self.assertIn('"LIVE"), "Match on now")', HTML)
+        # Only the chosen style ships: no mock-up switch or other variants.
+        self.assertNotIn("LIVE_STYLE", HTML)
+        self.assertNotIn("live-band", HTML)
+        self.assertNotIn("live-glow", HTML)
 
     def test_pitch_marks_real_subs_yellow_and_did_not_play_red(self):
         # Came on from the real bench: played, but didn't start. Didn't play:
