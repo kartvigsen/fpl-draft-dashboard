@@ -218,16 +218,13 @@ details.info[open] .sub { margin-top: 6px; }
 .player-chip.subbed { background: #fff3c4; box-shadow: inset 0 3px 0 #e8b100, 0 2px 6px rgba(0,0,0,.25); }
 .player-chip.dnp { background: #fbd9d6; box-shadow: inset 0 3px 0 #d43c3c, 0 2px 6px rgba(0,0,0,.25); }
 .player-chip.subbed .st { color: #6e5300; }
-/* MOCK-UP live styles */
+/* a player whose match is live */
 .live-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: mx-blink 1s step-end infinite; }
 .live-badge { position: absolute; top: -9px; right: -6px; display: inline-flex; align-items: center; gap: 3px; padding: 0 5px; height: 16px;
   border-radius: 5px; background: #16a34a; color: #fff; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; box-shadow: 0 0 0 2px #fff; }
-.player-chip.live-b { box-shadow: 0 0 0 2.5px #4ade80, 0 0 12px 2px rgba(74,222,128,.75); animation: live-glow 1.6s ease-in-out infinite; }
-@keyframes live-glow { 50% { box-shadow: 0 0 0 2.5px #4ade80, 0 0 3px 0 rgba(74,222,128,.3); } }
-.player-chip.live-c { padding-bottom: 0; overflow: hidden; }
-.live-band { display: flex; align-items: center; justify-content: center; gap: 4px; margin: 5px -4px 0; padding: 2px 0; background: #16a34a; color: #fff;
-  font-size: 9.5px; font-weight: 800; letter-spacing: .03em; }
-@media (prefers-reduced-motion: reduce) { .player-chip.live-b { animation: none; } }
+.live-badge.beside-cap { right: 16px; }
+.chip-legend .live-badge { position: static; box-shadow: none; }
+@media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
 .chip-legend { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 0; margin: 12px 0 0; font-size: 12px; color: var(--ink-2); }
 .chip-legend li { display: inline-flex; align-items: center; gap: 6px; }
 .chip-key { width: 14px; height: 14px; border-radius: 4px; background: rgba(255,255,255,.96); box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); }
@@ -1308,8 +1305,8 @@ pg = panels.liveround;
       const rest = statLine({ ...p, minutes: 0 });
       return [on ? `↑ ${on}'` : "↑ Sub", rest === "–" ? null : rest].filter(Boolean).join(" · ");
     };
-    // MOCK-UP: three ways to show a player whose match is live (?live=a|b|c).
-    const LIVE_STYLE = new URLSearchParams(location.search).get("live") || "a";
+    // A player whose match is on right now gets a green "LIVE" tag on the
+    // card's top-right corner (moved left of a captain/vice badge if any).
     const liveClock = p => {
       const m = (CR.matches || []).find(x => x.status === "live" && (x.home.short === p.team || x.away.short === p.team));
       return m && m.minutes > 0 ? `${m.minutes}'` : "";
@@ -1317,13 +1314,12 @@ pg = panels.liveround;
     const liveMark = p => {
       if (p.match !== "live") return null;
       const clk = liveClock(p);
-      if (LIVE_STYLE === "a") return h("span", { class: "live-badge", title: `Match live${clk ? ", " + clk : ""}` }, h("i", { class: "live-dot" }), "LIVE");
-      if (LIVE_STYLE === "c") return h("span", { class: "live-band", title: "Match live" }, h("i", { class: "live-dot" }), `LIVE ${clk}`);
-      return null;
+      return h("span", { class: `live-badge${p.is_captain || p.is_vice_captain ? " beside-cap" : ""}`,
+        title: `Match live${clk ? ", " + clk : ""}` }, h("i", { class: "live-dot" }), "LIVE");
     };
     const chip = p => {
       const st = chipState(p);
-      return h("button", { type: "button", class: `player-chip ${st}${p.minutes > 0 ? " played" : ""}${p.match === "live" ? " is-live live-" + LIVE_STYLE : ""}`,
+      return h("button", { type: "button", class: `player-chip ${st}${p.minutes > 0 ? " played" : ""}${p.match === "live" ? " is-live" : ""}`,
           title: `${p.name}: ${CHIP_TITLE[st]}`, onclick: () => openPlayerModal(p) },
         p.is_captain ? h("span", { class: "badge c", title: "Captain" }, "C") :
           p.is_vice_captain ? h("span", { class: "badge vc", title: "Vice-captain" }, "V") : null,
@@ -1334,7 +1330,8 @@ pg = panels.liveround;
     };
     const chipLegend = () => h("ul", { class: "chip-legend", "aria-label": "Player colours" },
       [["started", "Started"], ["subbed", "Came on as sub"], ["dnp", "Didn't play"], ["pending", "Yet to play"]]
-        .map(([k, label]) => h("li", {}, h("span", { class: `chip-key ${k}` }), label)));
+        .map(([k, label]) => h("li", {}, h("span", { class: `chip-key ${k}` }), label)),
+      h("li", {}, h("span", { class: "live-badge" }, h("i", { class: "live-dot" }), "LIVE"), "Match on now"));
 
     const teamsById = Object.fromEntries(CR.teams.map(t => [t.entry_id, t]));
     let activeEntryId = ranked[0].entry_id;
