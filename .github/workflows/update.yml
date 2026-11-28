@@ -24,6 +24,10 @@ on:
         description: "Only update if a match is on or the data is stale (set by the external scheduler)"
         type: boolean
         default: false
+      test_notification:
+        description: "Also send one test push notification (checks the OneSignal setup)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write         # save downloaded data back to the repository
@@ -65,6 +69,16 @@ jobs:
       - name: Download data and rebuild the dashboard
         if: steps.gate.outputs.run == 'true'
         run: python3 update.py
+
+      - name: Send match notifications
+        # Main only, so a test run on another branch never pings anyone.
+        if: steps.gate.outputs.run == 'true' && github.ref == 'refs/heads/main'
+        continue-on-error: true   # a notification hiccup must never block the dashboard update or deploy
+        env:
+          ONESIGNAL_API_KEY: ${{ secrets.ONESIGNAL_API_KEY }}
+        run: |
+          if [ "${{ inputs.test_notification }}" = "true" ]; then python3 notify.py --test; fi
+          python3 notify.py
 
       - name: Save new data to the repository
         if: steps.gate.outputs.run == 'true'

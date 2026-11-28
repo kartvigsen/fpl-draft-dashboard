@@ -331,6 +331,19 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn('cell("xG", x2(d.expected_goals)', fn)
         self.assertIn('He hasn\'t played this round.', fn)
 
+    def test_notification_bell_only_when_switched_on(self):
+        self.assertIn("const PUSH_APP_ID = meta.push_app_id || null;", HTML)
+        self.assertIn("if (!PUSH_APP_ID) return null;", HTML)
+        # iPhone needs the installed app; the worker has its own scope in push/.
+        self.assertIn("if (isIOS && !isInstalled) {", HTML)
+        self.assertIn("serviceWorkerParam: { scope: `${base}push/` }", HTML)
+        self.assertIn("await OneSignal.Notifications.requestPermission();", HTML)
+        self.assertIn("OneSignal.User.PushSubscription.optOut()", HTML)
+        # OneSignal's script loads only where push can work.
+        self.assertIn("if (pushSupported && (isInstalled || !isIOS)) {", HTML)
+        worker = (ROOT / "docs" / "push" / "OneSignalSDKWorker.js").read_text()
+        self.assertIn('importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");', worker)
+
     def test_live_round_highlights_players_who_have_played(self):
         self.assertIn('class: `player-chip ${st}${p.minutes > 0 ? " played" : ""}', HTML)
         # On a green pitch, a green "played" tint is hard to see, so players

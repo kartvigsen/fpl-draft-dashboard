@@ -1,4 +1,6 @@
 {
   "league_id": 7281,
-  "digest_enabled": false
+  "digest_enabled": false,
+  "notifications_enabled": false,
+  "onesignal_app_id": ""
 }

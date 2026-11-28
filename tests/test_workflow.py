@@ -192,6 +192,28 @@ class SaveStepPushRetryTest(unittest.TestCase):
         self.assertEqual(sum(c == "python3 update.py" for c in calls), 2)
 
 
+class NotificationStepTest(unittest.TestCase):
+    def step(self):
+        block = WORKFLOW[WORKFLOW.index("- name: Send match notifications"):]
+        return block[:block.index("\n\n")]
+
+    def test_runs_after_the_rebuild_and_before_the_data_is_saved(self):
+        # The notifier's state file is saved with the data in the same commit.
+        self.assertLess(WORKFLOW.index("run: python3 update.py"), WORKFLOW.index("- name: Send match notifications"))
+        self.assertLess(WORKFLOW.index("- name: Send match notifications"), WORKFLOW.index("- name: Save new data to the repository"))
+
+    def test_main_only_never_blocks_and_key_comes_from_a_secret(self):
+        step = self.step()
+        self.assertIn("github.ref == 'refs/heads/main'", step)
+        self.assertIn("continue-on-error: true", step)
+        self.assertIn("ONESIGNAL_API_KEY: ${{ secrets.ONESIGNAL_API_KEY }}", step)
+        self.assertIn("python3 notify.py", step)
+
+    def test_a_test_notification_can_be_sent_from_run_workflow(self):
+        self.assertIn("test_notification:", WORKFLOW)
+        self.assertIn('if [ "${{ inputs.test_notification }}" = "true" ]; then python3 notify.py --test; fi', self.step())
+
+
 class CheckoutTest(unittest.TestCase):
     def test_runs_start_from_the_branchs_latest_commit(self):
         # Not the commit the run was triggered on, which can be stale by

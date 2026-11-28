@@ -322,6 +322,8 @@ details.info[open] .sub { margin-top: 6px; }
 .mx-bench .role-tag { font-size: 10px; line-height: 15px; padding: 0 6px; }
 .role-tag.role-bench { background: var(--wash); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--border); }
 td.win.bench-pts { color: var(--muted); font-weight: 400; }
+.ghost.bell { position: relative; padding-left: 12px; padding-right: 12px; }
+.ghost.bell.on::after { content: ""; position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 2px var(--surface); }
 .pl-link { all: unset; cursor: pointer; text-decoration: underline dotted; text-decoration-color: var(--muted); text-underline-offset: 3px; }
 .pl-link:hover { text-decoration-style: solid; text-decoration-color: currentColor; }
 .pl-link:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 3px; }
@@ -751,6 +753,84 @@ function barList(rows, unit) {
   return wrap;
 }
 
+/* ---------- match notifications (OneSignal web push) ----------
+   Only when switched on (meta.push_app_id). OneSignal's page script loads
+   only where notifications can work -- an installed app on iPhone/iPad, or
+   a browser with push elsewhere -- and early, so the tap on the bell is the
+   permission prompt itself (iOS refuses a prompt that isn't a direct tap).
+   Its worker lives in push/ with its own scope, apart from sw.js. */
+const PUSH_APP_ID = meta.push_app_id || null;
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const isInstalled = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const pushSupported = "Notification" in window && "serviceWorker" in navigator && "PushManager" in window;
+let pushReady = null, pushBtnEl = null;
+function loadPush() {
+  if (pushReady) return pushReady;
+  pushReady = new Promise((resolve, reject) => {
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    window.OneSignalDeferred.push(async OneSignal => {
+      try {
+        const base = new URL(".", location.href).pathname;           // e.g. /fpl-draft-dashboard/
+        await OneSignal.init({ appId: PUSH_APP_ID, serviceWorkerPath: `${base}push/OneSignalSDKWorker.js`.slice(1),
+          serviceWorkerParam: { scope: `${base}push/` }, notifyButton: { enable: false } });
+        resolve(OneSignal);
+      } catch (e) { reject(e); }
+    });
+    const sc = document.createElement("script");
+    sc.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
+    sc.defer = true; sc.onerror = () => reject(new Error("Couldn't load the notification service"));
+    document.head.append(sc);
+  });
+  return pushReady;
+}
+function setPushState(on) {
+  if (!pushBtnEl) return;
+  pushBtnEl.classList.toggle("on", !!on);
+  pushBtnEl.setAttribute("aria-label", on ? "Match notifications: on" : "Match notifications: off");
+  pushBtnEl.title = on ? "Match notifications are on" : "Turn on match notifications";
+}
+function pushInfo(title, text, extra) {
+  modalCard.className = "modal-card";
+  modalCard.textContent = "";
+  modalCard.append(h("button", { type: "button", class: "ghost", style: "float:right", onclick: closeModal }, "Close"),
+    h("h3", {}, title), h("p", { class: "sub", style: "margin-top:8px" }, text), extra || "");
+  modalBackdrop.hidden = false;
+}
+async function onPushTap() {
+  if (isIOS && !isInstalled) {
+    return pushInfo("Install the app first", "On iPhone, notifications only work in the installed app. Tap Share, then \u201cAdd to Home Screen\u201d, open Draft Dash from your Home Screen and tap the bell there.");
+  }
+  if (!pushSupported) return pushInfo("Not available here", "This browser can't receive notifications.");
+  try {
+    const OneSignal = await loadPush();
+    if (OneSignal.User.PushSubscription.optedIn) {
+      return pushInfo("Notifications are on", "You'll hear about goals, assists, red cards, who's on fire, the lead changing hands and final scores.",
+        h("button", { type: "button", class: "ghost", style: "margin-top:12px;width:100%", onclick: async () => {
+          await OneSignal.User.PushSubscription.optOut(); setPushState(false); closeModal(); } }, "Turn off"));
+    }
+    if (Notification.permission === "denied") {
+      return pushInfo("Notifications are blocked", "Allow notifications for Draft Dash in your phone's Settings, then tap the bell again.");
+    }
+    await OneSignal.Notifications.requestPermission();
+    await OneSignal.User.PushSubscription.optIn();
+    setPushState(OneSignal.User.PushSubscription.optedIn);
+  } catch (e) {
+    pushInfo("Something went wrong", "Couldn't turn notifications on right now. Try again in a minute.");
+  }
+}
+function pushButton() {
+  if (!PUSH_APP_ID) return null;
+  pushBtnEl = h("button", { class: "ghost bell", type: "button", onclick: onPushTap }, "🔔");
+  setPushState(false);
+  if (pushSupported && (isInstalled || !isIOS)) {
+    window.addEventListener("load", () => loadPush().then(OneSignal => {
+      setPushState(OneSignal.User.PushSubscription.optedIn);
+      OneSignal.User.PushSubscription.addEventListener("change", ev => setPushState(ev.current.optedIn));
+    }).catch(() => {}));
+  }
+  return pushBtnEl;
+}
+
 /* ---------- page ---------- */
 const genDate = new Date(meta.generated_at);
 const genText = isNaN(genDate) ? "" : genDate.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
@@ -761,7 +841,7 @@ app.append(h("header", { class: "top" },
     h("h1", {}, meta.league_name),
     h("p", { class: "sub" }, meta.current_gw && !meta.current_gw_finished ? `GW${meta.current_gw} live`
       : lastFin ? `After GW${lastFin}` : "No gameweek finished yet", genText ? ` · updated ${genText}` : "")),
-  h("div", { class: "hdr-actions" },
+  h("div", { class: "hdr-actions" }, pushButton(),
     h("button", { class: "ghost", type: "button", onclick: toggleTheme }, "Light / dark"))));
 
 if (meta.demo) app.append(h("div", { class: "banner" }, h("strong", {}, "Demo data. "),

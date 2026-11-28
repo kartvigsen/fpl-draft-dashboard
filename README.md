@@ -165,6 +165,29 @@ It's off by default. To turn it on:
 
 From then on, the scheduled workflow sends the digest automatically the first time it sees a finished gameweek it hasn't sent yet (tracked in `.digest_state.json`), so a gameweek is only emailed once no matter how many times the workflow runs that day.
 
+## Match notifications
+
+Banter push notifications to everyone who turns them on, during each gameweek. They cover:
+
+- a goal or an assist by any player owned in the league; a goal from a manager's bench gets a crueller line
+- a red card for an owned player
+- a manager "on fire" (+15 points within about half an hour)
+- a new leader in the live round
+- confirmed bonus points in a finished match
+- the final scores once the gameweek is over
+
+The lines are cheeky and picked from a bank of variants, like the digest email. `notify.py` runs after each rebuild on `main`. It compares the new data with what it saw last time (`data/notify_state.json`, committed with the data) and sends through [OneSignal](https://onesignal.com). Busy moments are capped at 5 notifications per update, and the rest are rolled into one. Notifications arrive within one update cycle of FPL's own data (roughly 5–8 minutes), not instantly.
+
+To receive them, tap the 🔔 next to "Light / dark". On iPhone/iPad this only works in the installed app (Share → Add to Home Screen, iOS 16.4 or later); Safari in a tab explains that. The bell only appears once notifications are switched on.
+
+**One-time setup:**
+1. Create a free OneSignal account and a **Web** app for `https://kartvigsen.github.io`. Use the custom code / typical site setup; the page already has the code.
+2. Put the **App ID** in `config.json` as `"onesignal_app_id"` and set `"notifications_enabled": true`. The App ID is public by design.
+3. Add the **REST API key** as a repository secret named `ONESIGNAL_API_KEY` (Settings → Secrets and variables → Actions). Never put it in this repository.
+4. Check it: Actions → Update dashboard → Run workflow, with "Also send one test push notification" ticked.
+
+Until then the bell is hidden, and the notifier only records what it has seen, so switching on never replays old news. `python3 notify.py --dry-run` prints what it would send without changing anything.
+
 ## New season
 
 Draft leagues get a new ID each season. Change `league_id` in `config.json` and run `python3 update.py`. The next update automatically detects that the league changed (or that the cache predates this check) and re-downloads everything, so last season's cached "finished" gameweeks can't leak into the new season's numbers. You can still move or delete `data/raw/` yourself if you want to keep the old season's raw files elsewhere.

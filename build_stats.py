@@ -90,6 +90,11 @@ def _num(v):
         return 0.0
 
 
+def _push_app_id(config_path=None):
+    cfg = _load(config_path or ROOT / "config.json", {}) or {}
+    return cfg.get("onesignal_app_id") or None if cfg.get("notifications_enabled") else None
+
+
 def _load(path, default=None):
     p = Path(path)
     if not p.exists():
@@ -740,6 +745,9 @@ def build(raw=RAW, now=None):
             "last_finished_gw": last_final if last_final > 0 else 0,
             "generated_at": (now or datetime.now(timezone.utc)).isoformat(timespec="seconds"),
             "demo": False,
+            # The OneSignal app ID (public by design) once notifications are
+            # switched on in config.json; the page shows its bell only then.
+            "push_app_id": _push_app_id(),
         },
         "managers": managers,
         "rounds": rounds,
