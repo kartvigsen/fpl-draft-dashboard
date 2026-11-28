@@ -353,6 +353,31 @@ tr.sq-zero td { color: var(--muted); }
 .modal-stats { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; margin: 0; font-size: 13.5px; }
 .modal-stats dt { color: var(--ink-2); }
 .modal-stats dd { margin: 0; font-weight: 650; text-align: right; font-variant-numeric: tabular-nums; }
+/* MOCK-UP points breakdown */
+.bd { font-size: 14px; }
+.bd-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--grid); }
+.bd-lbl { color: var(--ink-2); }
+.bd-val { margin-left: 6px; color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.bd-prov { margin-left: 6px; font-size: 10.5px; font-weight: 700; padding: 0 6px; border-radius: 999px; background: var(--wash); color: var(--ink-2); }
+.bd-pts { font-weight: 750; font-variant-numeric: tabular-nums; color: var(--good); }
+.bd-row.neg .bd-pts { color: var(--bad); }
+.bd-row.total { border-bottom: 0; border-top: 2px solid var(--ink-2); margin-top: 2px; }
+.bd-row.total .bd-lbl, .bd-row.total .bd-pts { color: var(--ink); font-weight: 800; }
+.bd-foot { margin: 8px 0 0; }
+.bdbar { display: flex; gap: 2px; height: 22px; margin: 2px 0 8px; }
+.bdbar-seg { display: flex; align-items: center; justify-content: center; color: #fff; font-size: 11px; font-weight: 800; min-width: 10px; }
+.bdbar-seg:first-child { border-radius: 6px 0 0 6px; } .bdbar-seg:last-child { border-radius: 0 6px 6px 0; } .bdbar-seg:only-child { border-radius: 6px; }
+.bdbar-seg.prov { background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.28) 0 3px, transparent 3px 6px); }
+.bdbar-key { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 0; margin: 0 0 12px; font-size: 12.5px; color: var(--ink-2); }
+.bdbar-key li { display: inline-flex; align-items: center; gap: 5px; }
+.bdbar-key i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.bdbar-key b { color: var(--ink); }
+.bdbar-key li.neg i { background: var(--bad); } .bdbar-key li.neg b { color: var(--bad); }
+.modal-stats.with-pts { grid-template-columns: 1fr auto 44px; align-items: center; }
+.bd-pill { justify-self: end; font-size: 12px; font-weight: 800; padding: 1px 7px; border-radius: 999px; font-variant-numeric: tabular-nums;
+  background: color-mix(in oklab, var(--good) 16%, transparent); color: var(--good); }
+.bd-pill.neg { background: color-mix(in oklab, var(--bad) 16%, transparent); color: var(--bad); }
+
 .foot { margin-top: 40px; color: var(--ink-2); font-size: 12.5px; }
 .foot p { margin: 4px 0; }
 .empty { color: var(--ink-2); font-size: 13.5px; padding: 8px 0; }
@@ -1266,19 +1291,68 @@ pg = panels.liveround;
     };
 
     const statRow = (label, value) => [h("dt", {}, label), h("dd", {}, value)];
+    // Where the points come from: FPL's own breakdown (p.breakdown).
+    // MOCK-UP: three layouts, ?pts=a|b|c.
+    const PTS_STYLE = new URLSearchParams(location.search).get("pts") || "a";
+    const BD_LABEL = { minutes: "Minutes played", goals_scored: "Goals", assists: "Assists", clean_sheets: "Clean sheet",
+      goals_conceded: "Goals conceded", defensive_contribution: "Defensive contribution", saves: "Saves", bonus: "Bonus",
+      yellow_cards: "Yellow card", red_cards: "Red card", own_goals: "Own goal", penalties_saved: "Penalty saved", penalties_missed: "Penalty missed" };
+    const BD_COLOR = { minutes: "#8a8f98", goals_scored: "var(--series-1)", assists: "var(--series-3)", clean_sheets: "var(--series-2)",
+      defensive_contribution: "var(--series-4)", saves: "#2bb3c0", penalties_saved: "#2bb3c0", bonus: "#8b5cf6" };
+    const bdDetail = r => r.stat === "minutes" ? `${r.value}'` : r.stat === "clean_sheets" ? "" : r.value > 1 || ["defensive_contribution", "saves", "goals_conceded"].includes(r.stat) ? `${r.value}` : "";
+    const signed = n => (n > 0 ? `+${n}` : `−${Math.abs(n)}`);
+    const bdRows = p => p.breakdown || [];
+    function pointsReceipt(p) {
+      const rows = bdRows(p);
+      if (!rows.length) return emptyMsg("No points yet this round.");
+      return h("div", { class: "bd" },
+        rows.map(r => h("div", { class: `bd-row${r.points < 0 ? " neg" : ""}` },
+          h("span", { class: "bd-lbl" }, BD_LABEL[r.stat] || r.stat,
+            bdDetail(r) ? h("span", { class: "bd-val" }, bdDetail(r)) : null,
+            r.provisional ? h("span", { class: "bd-prov", title: "From live BPS, not yet confirmed by FPL" }, "provisional") : null),
+          h("span", { class: "bd-pts" }, signed(r.points)))),
+        h("div", { class: "bd-row total" }, h("span", { class: "bd-lbl" }, "Total"), h("span", { class: "bd-pts" }, `${fmt(p.points)} pts`)));
+    }
+    function pointsBar(p) {
+      const rows = bdRows(p), pos = rows.filter(r => r.points > 0), neg = rows.filter(r => r.points < 0);
+      const sum = pos.reduce((a, r) => a + r.points, 0) || 1;
+      return h("div", { class: "bdbar-wrap" },
+        h("div", { class: "bdbar", role: "img", "aria-label": rows.map(r => `${BD_LABEL[r.stat]} ${signed(r.points)}`).join(", ") },
+          pos.map(r => h("span", { class: `bdbar-seg${r.provisional ? " prov" : ""}`, style: `flex:${r.points};background:${BD_COLOR[r.stat] || "#999"}`,
+            title: `${BD_LABEL[r.stat]} ${signed(r.points)}` }, (r.points / sum) * 100 >= 12 ? signed(r.points) : ""))),
+        h("ul", { class: "bdbar-key" },
+          pos.map(r => h("li", {}, h("i", { style: `background:${BD_COLOR[r.stat] || "#999"}` }),
+            `${BD_LABEL[r.stat]}${r.provisional ? " (prov.)" : ""} `, h("b", {}, signed(r.points)))),
+          neg.map(r => h("li", { class: "neg" }, h("i", {}), `${BD_LABEL[r.stat]} `, h("b", {}, signed(r.points))))));
+    }
+    function statsWithPoints(p) {
+      const byStat = Object.fromEntries(bdRows(p).map(r => [r.stat, r]));
+      const pill = st => byStat[st] ? h("span", { class: `bd-pill${byStat[st].points < 0 ? " neg" : ""}` }, signed(byStat[st].points)) : h("span", {});
+      const row = (label, value, st) => [h("dt", {}, label), h("dd", {}, value), pill(st)];
+      const extra = bdRows(p).filter(r => !["minutes", "goals_scored", "assists", "clean_sheets", "defensive_contribution", "bonus"].includes(r.stat));
+      return h("div", {}, h("dl", { class: "modal-stats with-pts" },
+        row("Minutes", fmt(p.minutes), "minutes"), row("Goals", fmt(p.goals_scored), "goals_scored"),
+        row("Assists", fmt(p.assists), "assists"), row("Clean sheet", p.clean_sheets ? "Yes" : "No", "clean_sheets"),
+        row("Defensive contribution", fmt(p.defensive_contribution), "defensive_contribution"),
+        extra.map(r => row(BD_LABEL[r.stat] || r.stat, fmt(r.value), r.stat)),
+        row("Bonus", bonusText(p), "bonus"), [h("dt", {}, "BPS"), h("dd", {}, fmt(p.bps)), h("span", {})]),
+        h("div", { class: "bd-row total", style: "margin-top:8px" }, h("span", { class: "bd-lbl" }, "Total"), h("span", { class: "bd-pts" }, `${fmt(p.points)} pts`)));
+    }
     function openPlayerModal(p) {
       modalCard.className = "modal-card";
       modalCard.textContent = "";
       const role = p.is_captain ? " · Captain" : p.is_vice_captain ? " · Vice-captain" : "";
+      const oldStats = () => h("dl", { class: "modal-stats" },
+          statRow("Minutes", fmt(p.minutes)), statRow("Goals", fmt(p.goals_scored)),
+          statRow("Assists", fmt(p.assists)), statRow("Clean sheet", p.clean_sheets ? "Yes" : "No"),
+          statRow("Defensive contribution", fmt(p.defensive_contribution)), statRow("Bonus", bonusText(p)),
+          statRow("BPS", fmt(p.bps)));
       modalCard.append(
         h("button", { type: "button", class: "ghost", style: "float:right", onclick: closeModal }, "Close"),
         h("h3", {}, p.name), h("p", { class: "sub" }, `${p.team} · ${p.pos}${role}`),
         h("p", { class: "pts" }, `${fmt(p.points)} pts`, bonusBox(p.bonus, "lg", p.bonus_provisional)),
-        h("dl", { class: "modal-stats" },
-          statRow("Minutes", fmt(p.minutes)), statRow("Goals", fmt(p.goals_scored)),
-          statRow("Assists", fmt(p.assists)), statRow("Clean sheet", p.clean_sheets ? "Yes" : "No"),
-          statRow("Defensive contribution", fmt(p.defensive_contribution)), statRow("Bonus", bonusText(p)),
-          statRow("BPS", fmt(p.bps))),
+        PTS_STYLE === "a" ? h("div", {}, pointsReceipt(p), h("p", { class: "sub bd-foot" }, `BPS ${fmt(p.bps)}`))
+          : PTS_STYLE === "b" ? h("div", {}, pointsBar(p), oldStats()) : statsWithPoints(p),
         APById[p.id] ? h("button", { type: "button", class: "ghost", style: "margin-top:14px;width:100%",
           onclick: () => openPlayerHistory(p.id) }, "Season match by match ›") : "");
       modalBackdrop.hidden = false;
