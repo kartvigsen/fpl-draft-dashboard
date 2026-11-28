@@ -394,6 +394,9 @@ def build(raw=RAW, now=None):
     # the last one played), plus each manager's lineup for it. Unlike
     # "rounds"/records, this isn't finished-only -- the whole point of this
     # tab is the round as it stands right now.
+    DETAIL_STAT_KEYS = ("goals_conceded", "saves", "yellow_cards", "red_cards", "own_goals", "penalties_saved",
+                        "penalties_missed", "expected_goals", "expected_assists", "expected_goals_conceded",
+                        "clearances_blocks_interceptions", "tackles", "recoveries", "influence", "creativity", "threat")
     ROUND_STAT_KEYS = ("minutes", "starts", "goals_scored", "assists", "clean_sheets", "defensive_contribution", "bonus", "bps")
     live_cur_full = (_load(raw / "live" / f"gw{cur}.json", {}) or {}) if cur else {}
     live_cur = live_cur_full.get("elements", {}) or {}
@@ -405,6 +408,10 @@ def build(raw=RAW, now=None):
         row["bonus"] += prov
         row["bonus_provisional"] = prov
         row["breakdown"] = points_breakdown(el, prov)
+        # Fuller live stats for the player pop-up's second page; only for
+        # players who have played this round, to keep the data small.
+        if row["minutes"] > 0:
+            row["detail"] = {k: s.get(k, 0) or 0 for k in DETAIL_STAT_KEYS}
         return row
 
     def points_breakdown(el, prov):
