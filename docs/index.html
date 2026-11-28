@@ -353,6 +353,27 @@ tr.sq-zero td { color: var(--muted); }
 .modal-stats { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; margin: 0; font-size: 13.5px; }
 .modal-stats dt { color: var(--ink-2); }
 .modal-stats dd { margin: 0; font-weight: 650; text-align: right; font-variant-numeric: tabular-nums; }
+/* player pop-up: two swipeable pages */
+.pp-tabs { display: flex; gap: 4px; padding: 3px; border-radius: 999px; background: var(--wash); margin: 0 0 10px; }
+.pp-tab { all: unset; cursor: pointer; flex: 1; text-align: center; font-size: 13px; font-weight: 650; padding: 5px 0; border-radius: 999px; color: var(--ink-2); }
+.pp-tab[aria-selected="true"] { background: var(--ink); color: var(--surface); }
+.pp-tab:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.pp-pages { display: flex; align-items: flex-start; transition: height .2s ease; overflow-y: hidden; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; gap: 16px; overscroll-behavior-x: contain; }
+.pp-pages::-webkit-scrollbar { display: none; }
+.pp-page { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; }
+.ls-match { display: flex; align-items: center; justify-content: space-between; margin: 0 0 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ls-live { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 800; color: var(--good); }
+.ls-ft { font-size: 12px; color: var(--ink-2); font-weight: 600; }
+.ls-block { padding: 8px 0; border-top: 1px solid var(--grid); }
+.ls-head { display: flex; justify-content: space-between; font-size: 14px; color: var(--ink-2); }
+.ls-head b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.ls-note { margin: 3px 0 0; font-size: 12px; color: var(--muted); }
+.ls-meter { height: 8px; border-radius: 999px; background: var(--wash); margin-top: 6px; overflow: hidden; }
+.ls-meter span { display: block; height: 100%; border-radius: 999px; background: var(--series-4); }
+.ls-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding-top: 10px; border-top: 1px solid var(--grid); }
+.ls-cell { background: var(--wash); border-radius: 8px; padding: 6px 4px; text-align: center; }
+.ls-cell span { display: block; font-size: 11px; color: var(--ink-2); }
+.ls-cell b { font-size: 15px; font-variant-numeric: tabular-nums; }
 /* a round player's points breakdown */
 .bd { font-size: 14px; }
 .bd-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--grid); }
@@ -1295,18 +1316,88 @@ pg = panels.liveround;
           h("span", { class: "bd-pts" }, signed(r.points)))),
         h("div", { class: "bd-row total" }, h("span", { class: "bd-lbl" }, "Total"), h("span", { class: "bd-pts" }, `${fmt(p.points)} pts`)));
     }
+    // Second page of the player pop-up: the fuller live stats (p.detail).
+    function liveStatsPage(p) {
+      const d = p.detail;
+      const m = (CR.matches || []).find(x => x.status !== "upcoming" && (x.home.short === p.team || x.away.short === p.team));
+      const matchLine = m ? h("p", { class: "ls-match" },
+        `${m.home.short} ${m.home.score ?? 0}–${m.away.score ?? 0} ${m.away.short}`,
+        m.status === "live" ? h("span", { class: "ls-live" }, h("i", { class: "live-dot" }), `LIVE${m.minutes ? " " + m.minutes + "'" : ""}`)
+          : h("span", { class: "ls-ft" }, "Full time")) : null;
+      if (!d) return h("div", {}, matchLine, emptyMsg(p.match === "upcoming" ? "His match hasn't started yet." : "He hasn't played this round."));
+      // BPS rank in his match: the top three get bonus points.
+      let bpsNote = null;
+      if (m) {
+        const all = [...m.home.players, ...m.away.players].map(x => x.bps ?? 0).sort((a, b) => b - a);
+        const rank = all.filter(v => v > (p.bps ?? 0)).length + 1;
+        const third = all[2] ?? 0;
+        bpsNote = rank <= 3 ? `${rank}${["st", "nd", "rd"][rank - 1]} in the match: in the bonus` :
+          `${rank}th in the match · ${third - p.bps} behind 3rd`;
+      }
+      // DEFCON: 10 for defenders (clearances, blocks, interceptions, tackles),
+      // 12 for midfielders/forwards (recoveries count too). Keepers can't earn it.
+      let defcon = null;
+      if (p.pos !== "GKP") {
+        const need = p.pos === "DEF" ? 10 : 12, have = p.defensive_contribution;
+        const parts = [`CBI ${d.clearances_blocks_interceptions}`, `Tackles ${d.tackles}`].concat(p.pos === "DEF" ? [] : [`Recoveries ${d.recoveries}`]);
+        defcon = h("div", { class: "ls-block" },
+          h("div", { class: "ls-head" }, h("span", {}, "Defensive contribution"), h("b", {}, `${have} / ${need}`)),
+          h("div", { class: "ls-meter", role: "img", "aria-label": `${have} of ${need}` }, h("span", { style: `width:${Math.min(100, (have / need) * 100)}%` })),
+          h("p", { class: "ls-note" }, parts.join(" · "), " — ", have >= need ? "reached: +2 pts" : `${need - have} more for +2 pts`));
+      }
+      const x2 = v => (v ? Number(v).toFixed(2) : "0.00");
+      const cell = (label, value, title) => h("div", { class: "ls-cell", title: title || null }, h("span", {}, label), h("b", {}, value));
+      const cells = [
+        cell("Minutes", `${p.minutes}'`), cell("Goals", fmt(p.goals_scored)), cell("Assists", fmt(p.assists)),
+        cell("xG", x2(d.expected_goals), "Expected goals"), cell("xA", x2(d.expected_assists), "Expected assists"),
+        p.pos === "FWD" ? null : cell("Clean sheet", p.clean_sheets ? "Yes" : "No"),
+        p.pos === "GKP" || p.pos === "DEF" ? cell("Conceded", fmt(d.goals_conceded)) : null,
+        p.pos === "GKP" || p.pos === "DEF" ? cell("xGC", x2(d.expected_goals_conceded), "Expected goals conceded") : null,
+        p.pos === "GKP" ? cell("Saves", fmt(d.saves)) : null,
+        d.penalties_saved ? cell("Pens saved", fmt(d.penalties_saved)) : null,
+        d.yellow_cards ? cell("Yellow card", fmt(d.yellow_cards)) : null,
+        d.red_cards ? cell("Red card", fmt(d.red_cards)) : null,
+        d.own_goals ? cell("Own goals", fmt(d.own_goals)) : null,
+        d.penalties_missed ? cell("Pens missed", fmt(d.penalties_missed)) : null,
+      ].filter(Boolean);
+      return h("div", {}, matchLine,
+        h("div", { class: "ls-block" }, h("div", { class: "ls-head" }, h("span", {}, "BPS"), h("b", {}, fmt(p.bps))),
+          bpsNote ? h("p", { class: "ls-note" }, bpsNote) : null),
+        defcon,
+        h("div", { class: "ls-grid" }, cells),
+        d.influence || d.creativity || d.threat ? h("p", { class: "ls-note" },
+          `Influence ${d.influence} · Creativity ${d.creativity} · Threat ${d.threat}`) : null);
+    }
     function openPlayerModal(p) {
       modalCard.className = "modal-card";
       modalCard.textContent = "";
       const role = p.is_captain ? " · Captain" : p.is_vice_captain ? " · Vice-captain" : "";
+      // Two pages side by side: swipe between them on a phone, or tap the switch.
+      const pages = h("div", { class: "pp-pages" },
+        h("section", { class: "pp-page", "aria-label": "Points" }, pointsReceipt(p), h("p", { class: "sub bd-foot" }, `BPS ${fmt(p.bps)}`)),
+        h("section", { class: "pp-page", "aria-label": "Live stats" }, liveStatsPage(p)));
+      const tabs = ["Points", "Live stats"].map((label, i) => h("button", { type: "button", class: "pp-tab", "aria-selected": String(i === 0),
+        onclick: () => pages.scrollTo({ left: i * pages.clientWidth, behavior: "smooth" }) }, label));
+      // The pop-up follows the height of the page in view, so the short
+      // Points page doesn't leave a gap the size of the Live stats page.
+      const fit = i => { pages.style.height = `${pages.children[i].scrollHeight}px`; };
+      let current = 0;
+      pages.addEventListener("scroll", () => {
+        const i = Math.round(pages.scrollLeft / Math.max(1, pages.clientWidth));
+        if (i === current) return;
+        current = i;
+        tabs.forEach((t, j) => t.setAttribute("aria-selected", String(i === j)));
+        fit(i);
+      }, { passive: true });
       modalCard.append(
         h("button", { type: "button", class: "ghost", style: "float:right", onclick: closeModal }, "Close"),
         h("h3", {}, p.name), h("p", { class: "sub" }, `${p.team} · ${p.pos}${role}`),
         h("p", { class: "pts" }, `${fmt(p.points)} pts`, bonusBox(p.bonus, "lg", p.bonus_provisional)),
-        pointsReceipt(p), h("p", { class: "sub bd-foot" }, `BPS ${fmt(p.bps)}`),
+        h("div", { class: "pp-tabs", role: "tablist" }, tabs), pages,
         APById[p.id] ? h("button", { type: "button", class: "ghost", style: "margin-top:14px;width:100%",
           onclick: () => openPlayerHistory(p.id) }, "Season match by match ›") : "");
       modalBackdrop.hidden = false;
+      fit(0);
     }
     // A chip's state from the player's real match: started it (white),
     // came on from the real bench (yellow), didn't play once their match

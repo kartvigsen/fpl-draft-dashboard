@@ -318,6 +318,19 @@ class HomeScreenInstallTest(unittest.TestCase):
         for gone in ("PTS_STYLE", "pointsBar", "statsWithPoints", "bdbar", "bd-pill"):
             self.assertNotIn(gone, HTML)
 
+    def test_player_popup_swipes_to_a_live_stats_page(self):
+        fn = HTML[HTML.index("function liveStatsPage(p)"):HTML.index("// A chip's state from the player's real match")]
+        # Two pages in a horizontal scroll-snap strip, with a switch that follows the swipe.
+        self.assertIn('["Points", "Live stats"]', fn)
+        self.assertIn("pages.scrollTo({ left: i * pages.clientWidth", fn)
+        self.assertIn(".pp-pages { display: flex;", HTML)
+        self.assertIn("scroll-snap-type: x mandatory", HTML)
+        # Live stats: match line, BPS rank in the match, DEFCON progress, stat grid.
+        self.assertIn('rank <= 3 ? `${rank}${["st", "nd", "rd"][rank - 1]} in the match: in the bonus`', fn)
+        self.assertIn('const need = p.pos === "DEF" ? 10 : 12', fn)
+        self.assertIn('cell("xG", x2(d.expected_goals)', fn)
+        self.assertIn('He hasn\'t played this round.', fn)
+
     def test_live_round_highlights_players_who_have_played(self):
         self.assertIn('class: `player-chip ${st}${p.minutes > 0 ? " played" : ""}', HTML)
         # On a green pitch, a green "played" tint is hard to see, so players

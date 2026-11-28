@@ -1391,6 +1391,13 @@ class PitchMatchStateTest(unittest.TestCase):
         # No FPL breakdown in the feed: an empty list (the pop-up says so).
         self.assertEqual(self.build()[2]["breakdown"], [])
 
+    def test_detailed_live_stats_only_for_players_who_played(self):
+        players = self.build()
+        self.assertIn("detail", players[5])                 # 90 minutes
+        self.assertEqual(players[5]["detail"]["tackles"], 0)
+        self.assertIn("expected_goals", players[5]["detail"])
+        self.assertNotIn("detail", players[3])              # 0 minutes
+
     def test_starts_comes_from_the_live_feed(self):
         players = self.build()
         self.assertEqual((players[2]["minutes"], players[2]["starts"]), (20, 0))   # came on from the bench
