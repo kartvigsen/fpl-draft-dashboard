@@ -300,9 +300,23 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn('onclick: () => openPlayerModal(p)', HTML)
         self.assertIn("function openPlayerModal(p)", HTML)
         self.assertIn('class: "modal-backdrop"', HTML)
-        self.assertIn('statRow("Minutes"', HTML)
-        self.assertIn('statRow("Defensive contribution"', HTML)
+        # The pop-up explains the points: FPL's breakdown as a receipt.
+        self.assertIn("pointsReceipt(p)", HTML)
+        self.assertIn('p.points ? "Breakdown not available yet." : "No points yet this round."', HTML)
         self.assertIn('ev.key === "Escape"', HTML)
+
+    def test_player_popup_shows_where_the_points_come_from(self):
+        fn = HTML[HTML.index("function pointsReceipt(p)"):HTML.index("function openPlayerModal(p)")]
+        # One line per scoring item (label, detail, signed points), then a total.
+        self.assertIn('h("span", { class: "bd-pts" }, signed(r.points))', fn)
+        self.assertIn('r.points < 0 ? " neg" : ""', fn)
+        self.assertIn('"Total"), h("span", { class: "bd-pts" }, `${fmt(p.points)} pts`)', fn)
+        self.assertIn('const signed = n => (n > 0 ? `+${n}` : `−${Math.abs(n)}`);', HTML)
+        self.assertIn('minutes: "Minutes played"', HTML)
+        self.assertIn('defensive_contribution: "Defensive contribution"', HTML)
+        # Only the chosen layout ships.
+        for gone in ("PTS_STYLE", "pointsBar", "statsWithPoints", "bdbar", "bd-pill"):
+            self.assertNotIn(gone, HTML)
 
     def test_live_round_highlights_players_who_have_played(self):
         self.assertIn('class: `player-chip ${st}${p.minutes > 0 ? " played" : ""}', HTML)
@@ -377,7 +391,7 @@ class HomeScreenInstallTest(unittest.TestCase):
         self.assertIn('bonusBox(p.bonus, "corner", p.bonus_provisional)', HTML)
         self.assertIn('`${fmt(p.points)} pts`, bonusBox(p.bonus, "lg", p.bonus_provisional)', HTML)
         self.assertIn('bonusBox(p.bonus, "", p.bonus_provisional) || fmt(p.bonus)', HTML)
-        self.assertIn('statRow("Bonus", bonusText(p))', HTML)
+        self.assertIn('"provisional")', HTML)   # a provisional bonus line in the receipt
         self.assertIn('{ key: "bonus", label: "Bonus", num: true, get: p => p.bonus }', HTML)
         # The box replaces the old text versions, so bonus isn't shown twice.
         self.assertNotIn("`${p.bonus}B`", HTML)
@@ -592,7 +606,7 @@ class HomeScreenInstallTest(unittest.TestCase):
 
     def test_bps_is_shown_in_live_tables_match_view_and_player_modal(self):
         self.assertIn('{ key: "bps", label: "BPS", num: true, get: p => p.bps ?? 0 },', HTML)
-        self.assertIn('statRow("BPS", fmt(p.bps))', HTML)
+        self.assertIn('h("p", { class: "sub bd-foot" }, `BPS ${fmt(p.bps)}`)', HTML)
 
     def test_all_players_has_sortable_season_bps_and_bonus_columns(self):
         block = HTML[HTML.index("/* all players */"):HTML.index("/* fixtures */")]

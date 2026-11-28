@@ -353,6 +353,18 @@ tr.sq-zero td { color: var(--muted); }
 .modal-stats { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; margin: 0; font-size: 13.5px; }
 .modal-stats dt { color: var(--ink-2); }
 .modal-stats dd { margin: 0; font-weight: 650; text-align: right; font-variant-numeric: tabular-nums; }
+/* a round player's points breakdown */
+.bd { font-size: 14px; }
+.bd-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--grid); }
+.bd-lbl { color: var(--ink-2); }
+.bd-val { margin-left: 6px; color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.bd-prov { margin-left: 6px; font-size: 10.5px; font-weight: 700; padding: 0 6px; border-radius: 999px; background: var(--wash); color: var(--ink-2); }
+.bd-pts { font-weight: 750; font-variant-numeric: tabular-nums; color: var(--good); }
+.bd-row.neg .bd-pts { color: var(--bad); }
+.bd-row.total { border-bottom: 0; border-top: 2px solid var(--ink-2); margin-top: 2px; }
+.bd-row.total .bd-lbl, .bd-row.total .bd-pts { color: var(--ink); font-weight: 800; }
+.bd-foot { margin: 8px 0 0; }
+
 .foot { margin-top: 40px; color: var(--ink-2); font-size: 12.5px; }
 .foot p { margin: 4px 0; }
 .empty { color: var(--ink-2); font-size: 13.5px; padding: 8px 0; }
@@ -1254,7 +1266,6 @@ pg = panels.liveround;
     const POS_ORDER = ["GKP", "DEF", "MID", "FWD"];
     // 3 green, 2 blue, 1 purple; a double gameweek can exceed 3, shown as green.
     // Striped = provisional: from live BPS (top 3 in a match), not yet confirmed by FPL.
-    const bonusText = p => p.bonus_provisional ? `${fmt(p.bonus)} (${p.bonus_provisional === p.bonus ? "" : `${p.bonus_provisional} `}provisional)` : fmt(p.bonus);
     const statLine = p => {
       const parts = [];
       if (p.minutes) parts.push(`${p.minutes}'`);
@@ -1265,7 +1276,25 @@ pg = panels.liveround;
       return parts.join(" · ") || "–";
     };
 
-    const statRow = (label, value) => [h("dt", {}, label), h("dd", {}, value)];
+    // Where the points come from: FPL's own breakdown (p.breakdown), one
+    // line per scoring item and a total, like a receipt.
+    const BD_LABEL = { minutes: "Minutes played", goals_scored: "Goals", assists: "Assists", clean_sheets: "Clean sheet",
+      goals_conceded: "Goals conceded", defensive_contribution: "Defensive contribution", saves: "Saves", bonus: "Bonus",
+      yellow_cards: "Yellow card", red_cards: "Red card", own_goals: "Own goal", penalties_saved: "Penalty saved", penalties_missed: "Penalty missed" };
+    const bdDetail = r => r.stat === "minutes" ? `${r.value}'` : r.stat === "clean_sheets" ? "" : r.value > 1 || ["defensive_contribution", "saves", "goals_conceded"].includes(r.stat) ? `${r.value}` : "";
+    const signed = n => (n > 0 ? `+${n}` : `−${Math.abs(n)}`);
+    const bdRows = p => p.breakdown || [];
+    function pointsReceipt(p) {
+      const rows = bdRows(p);
+      if (!rows.length) return emptyMsg(p.points ? "Breakdown not available yet." : "No points yet this round.");
+      return h("div", { class: "bd" },
+        rows.map(r => h("div", { class: `bd-row${r.points < 0 ? " neg" : ""}` },
+          h("span", { class: "bd-lbl" }, BD_LABEL[r.stat] || r.stat,
+            bdDetail(r) ? h("span", { class: "bd-val" }, bdDetail(r)) : null,
+            r.provisional ? h("span", { class: "bd-prov", title: "From live BPS, not yet confirmed by FPL" }, "provisional") : null),
+          h("span", { class: "bd-pts" }, signed(r.points)))),
+        h("div", { class: "bd-row total" }, h("span", { class: "bd-lbl" }, "Total"), h("span", { class: "bd-pts" }, `${fmt(p.points)} pts`)));
+    }
     function openPlayerModal(p) {
       modalCard.className = "modal-card";
       modalCard.textContent = "";
@@ -1274,11 +1303,7 @@ pg = panels.liveround;
         h("button", { type: "button", class: "ghost", style: "float:right", onclick: closeModal }, "Close"),
         h("h3", {}, p.name), h("p", { class: "sub" }, `${p.team} · ${p.pos}${role}`),
         h("p", { class: "pts" }, `${fmt(p.points)} pts`, bonusBox(p.bonus, "lg", p.bonus_provisional)),
-        h("dl", { class: "modal-stats" },
-          statRow("Minutes", fmt(p.minutes)), statRow("Goals", fmt(p.goals_scored)),
-          statRow("Assists", fmt(p.assists)), statRow("Clean sheet", p.clean_sheets ? "Yes" : "No"),
-          statRow("Defensive contribution", fmt(p.defensive_contribution)), statRow("Bonus", bonusText(p)),
-          statRow("BPS", fmt(p.bps))),
+        pointsReceipt(p), h("p", { class: "sub bd-foot" }, `BPS ${fmt(p.bps)}`),
         APById[p.id] ? h("button", { type: "button", class: "ghost", style: "margin-top:14px;width:100%",
           onclick: () => openPlayerHistory(p.id) }, "Season match by match ›") : "");
       modalBackdrop.hidden = false;

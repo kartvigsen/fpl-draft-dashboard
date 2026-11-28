@@ -404,7 +404,26 @@ def build(raw=RAW, now=None):
         prov = prov_bonus.get(el, 0)
         row["bonus"] += prov
         row["bonus_provisional"] = prov
+        row["breakdown"] = points_breakdown(el, prov)
         return row
+
+    def points_breakdown(el, prov):
+        """Where a player's round points come from, as FPL itself explains
+        them: one line per scoring item with its value and points (summed
+        over a double gameweek's matches), zero-point items left out. A
+        provisional bonus from live BPS is added as its own line, marked
+        provisional, so the lines always add up to the shown total."""
+        by_stat = {}
+        for entries, _fid in (live_cur.get(str(el), {}) or {}).get("explain") or []:
+            for e in entries:
+                st = e.get("stat")
+                row = by_stat.setdefault(st, {"stat": st, "value": 0, "points": 0})
+                row["value"] += e.get("value", 0) or 0
+                row["points"] += e.get("points", 0) or 0
+        lines = [r for r in by_stat.values() if r["points"]]
+        if prov:
+            lines.append({"stat": "bonus", "value": prov, "points": prov, "provisional": True})
+        return lines
 
     def match_state(el):
         """Where the player's own match stands this gameweek: "over" (all
