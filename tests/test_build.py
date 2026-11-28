@@ -1365,6 +1365,9 @@ class PitchMatchStateTest(unittest.TestCase):
         live["elements"]["2"]["stats"]["starts"] = 0      # 90 minutes... off the bench in this fixture
         live["elements"]["2"]["stats"]["minutes"] = 20
         live["elements"]["5"]["stats"]["starts"] = 1
+        live["elements"]["5"]["explain"] = [[[{"stat": "minutes", "value": 90, "points": 2},
+                                              {"stat": "goals_conceded", "value": 1, "points": 0},
+                                              {"stat": "bonus", "value": 2, "points": 2}], 3]]
         live["fixtures"] = [
             {"team_h": 1, "team_a": 4, "started": True, "finished": False, "finished_provisional": True},
             {"team_h": 2, "team_a": 3, "started": False, "finished": False, "finished_provisional": False},
@@ -1379,6 +1382,14 @@ class PitchMatchStateTest(unittest.TestCase):
         self.assertEqual(players[1]["match"], "over")       # team 1: finished_provisional
         self.assertEqual(players[3]["match"], "upcoming")   # team 2: not kicked off
         self.assertEqual(players[5]["match"], "live")       # team 5: in progress
+
+    def test_points_breakdown_matches_the_points(self):
+        p = self.build()[5]
+        self.assertEqual(p["breakdown"], [{"stat": "minutes", "value": 90, "points": 2},
+                                          {"stat": "bonus", "value": 2, "points": 2}])   # zero-point items left out
+        self.assertEqual(sum(r["points"] for r in p["breakdown"]), p["points"])
+        # No FPL breakdown in the feed: an empty list (the pop-up says so).
+        self.assertEqual(self.build()[2]["breakdown"], [])
 
     def test_starts_comes_from_the_live_feed(self):
         players = self.build()
